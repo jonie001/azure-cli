@@ -32,6 +32,8 @@ from azure.graphrbac.models import (ApplicationCreateParameters, ApplicationUpda
 
 from ._client_factory import _auth_client_factory, _graph_client_factory
 from ._multi_api_adaptor import MultiAPIAdaptor
+from ._graph_client import GraphClient
+
 
 CREDENTIAL_WARNING = (
     "The output includes credentials that you must protect. Be sure that you do not include these credentials in "
@@ -591,9 +593,10 @@ def _resolve_role_id(role, scope, definitions_client):
 
 def list_apps(cmd, app_id=None, display_name=None, identifier_uri=None, query_filter=None, include_all=None,
               show_mine=None):
-    client = _graph_client_factory(cmd.cli_ctx)
+    client = GraphClient(cmd.cli_ctx)
+
     if show_mine:
-        return list_owned_objects(client.signed_in_user, 'application')
+        return list_owned_objects(client, '#microsoft.graph.application')
     sub_filters = []
     if query_filter:
         sub_filters.append(query_filter)
@@ -604,7 +607,9 @@ def list_apps(cmd, app_id=None, display_name=None, identifier_uri=None, query_fi
     if identifier_uri:
         sub_filters.append("identifierUris/any(s:s eq '{}')".format(identifier_uri))
 
-    result = client.applications.list(filter=(' and '.join(sub_filters)))
+    # https://docs.microsoft.com/en-us/graph/api/application-list
+    result = client.send("GET", "/applications?$filter={}".format(' and '.join(sub_filters)))
+
     if sub_filters or include_all:
         return list(result)
 
@@ -660,7 +665,8 @@ def list_sps(cmd, spn=None, display_name=None, query_filter=None, show_mine=None
 
 
 def list_owned_objects(client, object_type=None):
-    result = client.list_owned_objects()
+    # https://docs.microsoft.com/en-us/graph/api/user-list-ownedobjects
+    result = client.send("GET", "/me/ownedObjects")
     if object_type:
         result = [r for r in result if r.object_type and r.object_type.lower() == object_type.lower()]
     return result
@@ -794,6 +800,17 @@ def create_application(cmd, display_name, homepage=None, identifier_uris=None,  
                        key_value=None, key_type=None, key_usage=None, start_date=None, end_date=None,
                        oauth2_allow_implicit_flow=None, required_resource_accesses=None, native_app=None,
                        credential_description=None, app_roles=None, optional_claims=None):
+
+    client = GraphClient(cmd.cli_ctx)
+    # https://docs.microsoft.com/en-us/graph/api/application-post-applications?view=graph-rest-1.0&tabs=http
+    body = {
+        "displayName": display_name
+    }
+    result = client.send("POST", "/applications", body=body)
+    return r
+
+    client = _graph_client_factory(cmd.cli_ctx)
+
     graph_client = _graph_client_factory(cmd.cli_ctx)
     key_creds, password_creds, required_accesses = None, None, None
     existing_apps = list_apps(cmd, display_name=display_name)
@@ -1161,28 +1178,33 @@ def _build_optional_claims(optional_claims):
     return result
 
 
-def show_application(client, identifier):
+def show_application(cmd, client, identifier):
+    client = GraphClient(cmd.cli_ctx)
     object_id = _resolve_application(client, identifier)
-    return client.get(object_id)
+    # https://docs.microsoft.com/en-us/graph/api/application-get
+    result = client.send("GET", "/applications/{id}".format(id=object_id))
+    return result
 
 
-def delete_application(client, identifier):
+def delete_application(cmd, client, identifier):
+    client = GraphClient(cmd.cli_ctx)
     object_id = _resolve_application(client, identifier)
-    client.delete(object_id)
+    # https://docs.microsoft.com/en-us/graph/api/application-delete
+    client.send("DELETE", "/applications/{id}".format(id=object_id))
 
 
 def _resolve_application(client, identifier):
-    result = list(client.list(filter="identifierUris/any(s:s eq '{}')".format(identifier)))
+    result = client.send("GET", "/applications?$filter=identifierUris/any(s:s eq '{}')".format(identifier))
     if not result:
         if is_guid(identifier):
             # it is either app id or object id, let us verify
-            result = list(client.list(filter="appId eq '{}'".format(identifier)))
+            result = client.send("GET", "/applications?$filter=appId eq '{}'".format(identifier))
         else:
             error = CLIError("Application '{}' doesn't exist".format(identifier))
             error.status_code = 404  # Make sure CLI returns 3
             raise error
 
-    return result[0].object_id if result else identifier
+    return result[0]['id'] if result else identifier
 
 
 def _build_application_creds(password=None, key_value=None, key_type=None, key_usage=None,
