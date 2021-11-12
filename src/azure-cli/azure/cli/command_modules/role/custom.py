@@ -662,7 +662,6 @@ def list_sps(cmd, client, spn=None, display_name=None, query_filter=None, show_m
 
 
 def list_owned_objects(client, object_type=None):
-    # https://docs.microsoft.com/en-us/graph/api/user-list-ownedobjects
     result = client.owned_objects_list()
     if object_type:
         result = [r for r in result if r.get('@odata.type') and r.get('@odata.type').lower() == object_type.lower()]
@@ -1267,7 +1266,7 @@ def _create_service_principal(cli_ctx, identifier, resolve_app=True):
 
 def show_service_principal(client, identifier):
     object_id = _resolve_service_principal(client, identifier)
-    return client.service_principal_show(object_id)
+    return client.service_principal_get(object_id)
 
 
 def delete_service_principal(cmd, identifier):
@@ -1552,7 +1551,7 @@ def create_service_principal_for_rbac(
 
 def _get_signed_in_user_object_id(graph_client):
     try:
-        return graph_client.signed_in_user.get().object_id
+        return graph_client.signed_in_user_get()['id']
     except GraphErrorException:  # error could be possible if you logged in as a service principal
         pass
 
@@ -1912,3 +1911,8 @@ def list_user_assigned_identities(cmd, resource_group_name=None):
     if resource_group_name:
         return client.user_assigned_identities.list_by_resource_group(resource_group_name)
     return client.user_assigned_identities.list_by_subscription()
+
+
+def show_signed_in_user(client):
+    result = client.signed_in_user_get()
+    return result

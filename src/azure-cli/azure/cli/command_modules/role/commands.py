@@ -196,10 +196,10 @@ def load_command_table(self, _):
         g.custom_command('create', 'create_user', client_factory=get_graph_client_users, doc_string_source='azure.graphrbac.models#UserCreateParameters')
         g.custom_command('update', 'update_user', client_factory=get_graph_client_users, validator=validate_change_password)
 
-    with self.command_group('ad signed-in-user', signed_in_users_sdk, exception_handler=graph_err_handler,
+    with self.command_group('ad signed-in-user', client_factory=get_graph_client, exception_handler=graph_err_handler,
                             transform=transform_graph_objects_with_cred) as g:
-        g.show_command('show', 'get')
-        g.custom_command('list-owned-objects', 'list_owned_objects', client_factory=get_graph_client_signed_in_users)
+        g.custom_command('show', 'show_signed_in_user')
+        g.custom_command('list-owned-objects', 'list_owned_objects')
 
     with self.command_group('ad group', role_group_sdk, exception_handler=graph_err_handler) as g:
         g.command('delete', 'delete')

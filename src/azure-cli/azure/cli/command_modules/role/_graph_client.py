@@ -19,7 +19,7 @@ class GraphClient:
         # https://graph.microsoft.com/v1.0
         self.base_url = cli_ctx.cloud.endpoints.microsoft_graph_resource_id + 'v1.0'
 
-    def send(self, method, url, param=None, body=None):
+    def _send(self, method, url, param=None, body=None):
         url = self.base_url + url
 
         if body:
@@ -38,70 +38,75 @@ class GraphClient:
 
     def application_create(self, body):
         # https://docs.microsoft.com/en-us/graph/api/application-post-applications
-        result = self.send("POST", "/applications", body=body)
+        result = self._send("POST", "/applications", body=body)
         return result
 
-    def application_show(self, id):
+    def application_get(self, id):
         # https://docs.microsoft.com/en-us/graph/api/application-get
-        result = self.send("GET", "/applications/{id}".format(id=id))
+        result = self._send("GET", "/applications/{id}".format(id=id))
         return result
 
     def application_list(self, filter=None):
         # https://docs.microsoft.com/en-us/graph/api/application-list
-        result = self.send("GET", "/applications?$filter={}".format(filter))
+        result = self._send("GET", "/applications?$filter={}".format(filter))
         return result
 
     def application_delete(self, id):
         # https://docs.microsoft.com/en-us/graph/api/application-delete
-        result = self.send("DELETE", "/applications/{id}".format(id=id))
+        result = self._send("DELETE", "/applications/{id}".format(id=id))
         return result
 
     def application_owner_add(self, id, body):
         # https://docs.microsoft.com/en-us/graph/api/application-post-owners
-        result = self.send("POST", "/applications/{id}/owners/$ref".format(id=id), body=body)
+        result = self._send("POST", "/applications/{id}/owners/$ref".format(id=id), body=body)
         return result
 
     def application_owner_list(self, id):
         # https://docs.microsoft.com/en-us/graph/api/application-list-owners
-        result = self.send("GET", "/applications/{id}/owners".format(id=id))
+        result = self._send("GET", "/applications/{id}/owners".format(id=id))
         return result
 
     def application_owner_remove(self, id):
         # https://docs.microsoft.com/en-us/graph/api/application-delete-owners
-        result = self.send("DELETE", "/applications/{id}/owners/{id}/$ref".format(id=id))
+        result = self._send("DELETE", "/applications/{id}/owners/{id}/$ref".format(id=id))
         return result
 
     def application_password_create(self, id):
         # https://docs.microsoft.com/en-us/graph/api/application-addpassword
-        result = self.send("POST", "/applications/{id}/addPassword".format(id=id))
+        result = self._send("POST", "/applications/{id}/addPassword".format(id=id))
         return result
 
     def application_password_delete(self, id):
         # https://docs.microsoft.com/en-us/graph/api/application-addpassword
-        result = self.send("POST", "/applications/{id}/removePassword".format(id=id))
+        result = self._send("POST", "/applications/{id}/removePassword".format(id=id))
         return result
 
     def service_principal_create(self, body):
         # https://docs.microsoft.com/en-us/graph/api/application-post-applications
-        result = self.send("POST", "/servicePrincipals", body=body)
+        result = self._send("POST", "/servicePrincipals", body=body)
         return result
 
-    def service_principal_show(self, id):
+    def service_principal_get(self, id):
         # https://docs.microsoft.com/en-us/graph/api/application-get
-        result = self.send("GET", "/servicePrincipals/{id}".format(id=id))
+        result = self._send("GET", "/servicePrincipals/{id}".format(id=id))
         return result
 
     def service_principal_list(self, filter=None):
         # https://docs.microsoft.com/en-us/graph/api/application-list
-        result = self.send("GET", "/servicePrincipals?$filter={}".format(filter))
+        result = self._send("GET", "/servicePrincipals?$filter={}".format(filter))
         return result
 
     def service_principal_delete(self, id):
         # https://docs.microsoft.com/en-us/graph/api/application-delete
-        result = self.send("DELETE", "/servicePrincipals/{id}".format(id=id))
+        result = self._send("DELETE", "/servicePrincipals/{id}".format(id=id))
         return result
 
     def owned_objects_list(self):
         # https://docs.microsoft.com/en-us/graph/api/user-list-ownedobjects
-        result = self.send("GET", "/me/ownedObjects")
+        result = self._send("GET", "/me/ownedObjects")
+        return result
+
+    def signed_in_user_get(self):
+        # https://docs.microsoft.com/en-us/graph/api/user-get
+        result = self._send("GET", "/me")
         return result
