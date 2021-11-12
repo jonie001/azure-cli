@@ -73,6 +73,10 @@ def get_role_definitions(cli_ctx, _):
     return _auth_client_factory(cli_ctx, ).role_definitions
 
 
+def get_graph_client(cli_ctx, _):
+    return _graph_client_factory(cli_ctx)
+
+
 def get_graph_client_applications(cli_ctx, _):
     return _graph_client_factory(cli_ctx).applications
 
@@ -95,6 +99,11 @@ def get_graph_client_groups(cli_ctx, _):
 
 # pylint: disable=line-too-long, too-many-statements
 def load_command_table(self, _):
+
+    graph_sdk = CliCommandType(
+        operations_tmpl='azure.cli.command_modules.role._graph_client#GraphClient.{}',
+        client_factory=get_graph_client
+    )
 
     role_users_sdk = CliCommandType(
         operations_tmpl='azure.graphrbac.operations#UsersOperations.{}',
@@ -136,7 +145,7 @@ def load_command_table(self, _):
         g.custom_command('update', 'update_role_assignment', min_api='2020-04-01-preview')
         g.custom_command('list-changelogs', 'list_role_assignment_change_logs')
 
-    with self.command_group('ad app', client_factory=get_graph_client_applications, resource_type=PROFILE_TYPE,
+    with self.command_group('ad app', client_factory=get_graph_client, resource_type=PROFILE_TYPE,
                             exception_handler=graph_err_handler, transform=transform_graph_objects_with_cred) as g:
         g.custom_command('create', 'create_application')
         g.custom_command('delete', 'delete_application')
@@ -160,12 +169,12 @@ def load_command_table(self, _):
         g.custom_command('add', 'add_application_owner')
         g.custom_command('remove', 'remove_application_owner')
 
-    with self.command_group('ad sp', command_type=sp_sdk, resource_type=PROFILE_TYPE, exception_handler=graph_err_handler,
+    with self.command_group('ad sp', client_factory=get_graph_client, resource_type=PROFILE_TYPE, exception_handler=graph_err_handler,
                             transform=transform_graph_objects_with_cred) as g:
         g.custom_command('create', 'create_service_principal')
         g.custom_command('delete', 'delete_service_principal')
-        g.custom_command('list', 'list_sps', client_factory=get_graph_client_service_principals)
-        g.custom_show_command('show', 'show_service_principal', client_factory=get_graph_client_service_principals)
+        g.custom_command('list', 'list_sps')
+        g.custom_show_command('show', 'show_service_principal')
         g.generic_update_command('update', getter_name='show_service_principal', getter_type=role_custom,
                                  setter_name='patch_service_principal', setter_type=role_custom)
 

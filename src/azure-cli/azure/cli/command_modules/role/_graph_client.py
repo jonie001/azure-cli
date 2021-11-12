@@ -32,3 +32,76 @@ class GraphClient:
             return r.json()
         else:
             return None
+
+    # id is python built-in name: https://docs.python.org/3/library/functions.html#id
+    # filter is python built-in name: https://docs.python.org/3/library/functions.html#filter
+
+    def application_create(self, body):
+        # https://docs.microsoft.com/en-us/graph/api/application-post-applications
+        result = self.send("POST", "/applications", body=body)
+        return result
+
+    def application_show(self, id):
+        # https://docs.microsoft.com/en-us/graph/api/application-get
+        result = self.send("GET", "/applications/{id}".format(id=id))
+        return result
+
+    def application_list(self, filter=None):
+        # https://docs.microsoft.com/en-us/graph/api/application-list
+        result = self.send("GET", "/applications?$filter={}".format(filter))
+        return result
+
+    def application_delete(self, id):
+        # https://docs.microsoft.com/en-us/graph/api/application-delete
+        result = self.send("DELETE", "/applications/{id}".format(id=id))
+        return result
+
+    def application_owner_add(self, id, body):
+        # https://docs.microsoft.com/en-us/graph/api/application-post-owners
+        result = self.send("POST", "/applications/{id}/owners/$ref".format(id=id), body=body)
+        return result
+
+    def application_owner_list(self, id):
+        # https://docs.microsoft.com/en-us/graph/api/application-list-owners
+        result = self.send("GET", "/applications/{id}/owners".format(id=id))
+        return result
+
+    def application_owner_remove(self, id):
+        # https://docs.microsoft.com/en-us/graph/api/application-delete-owners
+        result = self.send("DELETE", "/applications/{id}/owners/{id}/$ref".format(id=id))
+        return result
+
+    def application_password_create(self, id):
+        # https://docs.microsoft.com/en-us/graph/api/application-addpassword
+        result = self.send("POST", "/applications/{id}/addPassword".format(id=id))
+        return result
+
+    def application_password_delete(self, id):
+        # https://docs.microsoft.com/en-us/graph/api/application-addpassword
+        result = self.send("POST", "/applications/{id}/removePassword".format(id=id))
+        return result
+
+    def service_principal_create(self, body):
+        # https://docs.microsoft.com/en-us/graph/api/application-post-applications
+        result = self.send("POST", "/servicePrincipals", body=body)
+        return result
+
+    def service_principal_show(self, id):
+        # https://docs.microsoft.com/en-us/graph/api/application-get
+        result = self.send("GET", "/servicePrincipals/{id}".format(id=id))
+        return result
+
+    def service_principal_list(self, filter=None):
+        # https://docs.microsoft.com/en-us/graph/api/application-list
+        result = self.send("GET", "/servicePrincipals?$filter={}".format(filter))
+        return result
+
+    def service_principal_delete(self, id):
+        # https://docs.microsoft.com/en-us/graph/api/application-delete
+        result = self.send("DELETE", "/servicePrincipals/{id}".format(id=id))
+        return result
+
+    def owned_objects_list(self):
+        # https://docs.microsoft.com/en-us/graph/api/user-list-ownedobjects
+        result = self.send("GET", "/me/ownedObjects")
+        return result

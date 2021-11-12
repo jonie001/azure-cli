@@ -591,10 +591,8 @@ def _resolve_role_id(role, scope, definitions_client):
     return role_id
 
 
-def list_apps(cmd, app_id=None, display_name=None, identifier_uri=None, query_filter=None, include_all=None,
+def list_apps(cmd, client, app_id=None, display_name=None, identifier_uri=None, query_filter=None, include_all=None,
               show_mine=None):
-    client = GraphClient(cmd.cli_ctx)
-
     if show_mine:
         return list_owned_objects(client, '#microsoft.graph.application')
     sub_filters = []
@@ -608,7 +606,7 @@ def list_apps(cmd, app_id=None, display_name=None, identifier_uri=None, query_fi
         sub_filters.append("identifierUris/any(s:s eq '{}')".format(identifier_uri))
 
     # https://docs.microsoft.com/en-us/graph/api/application-list
-    result = client.send("GET", "/applications?$filter={}".format(' and '.join(sub_filters)))
+    result = client.application_list(filter=' and '.join(sub_filters))
 
     if sub_filters or include_all:
         return list(result)
@@ -639,8 +637,7 @@ def remove_application_owner(cmd, owner_object_id, identifier):
     return client.remove_owner(_resolve_application(client, identifier), owner_object_id)
 
 
-def list_sps(cmd, spn=None, display_name=None, query_filter=None, show_mine=None, include_all=None):
-    client = _graph_client_factory(cmd.cli_ctx)
+def list_sps(cmd, client, spn=None, display_name=None, query_filter=None, show_mine=None, include_all=None):
     if show_mine:
         return list_owned_objects(client.signed_in_user, 'servicePrincipal')
 
@@ -652,7 +649,7 @@ def list_sps(cmd, spn=None, display_name=None, query_filter=None, show_mine=None
     if display_name:
         sub_filters.append("startswith(displayName,'{}')".format(display_name))
 
-    result = client.service_principals.list(filter=(' and '.join(sub_filters)))
+    result = client.service_principal_list(filter=(' and '.join(sub_filters)))
 
     if sub_filters or include_all:
         return result
@@ -666,9 +663,9 @@ def list_sps(cmd, spn=None, display_name=None, query_filter=None, show_mine=None
 
 def list_owned_objects(client, object_type=None):
     # https://docs.microsoft.com/en-us/graph/api/user-list-ownedobjects
-    result = client.send("GET", "/me/ownedObjects")
+    result = client.owned_objects_list()
     if object_type:
-        result = [r for r in result if r.object_type and r.object_type.lower() == object_type.lower()]
+        result = [r for r in result if r.get('@odata.type') and r.get('@odata.type').lower() == object_type.lower()]
     return result
 
 
@@ -795,19 +792,18 @@ def _resolve_group(client, identifier):
     return identifier
 
 
-def create_application(cmd, display_name, homepage=None, identifier_uris=None,  # pylint: disable=too-many-locals
+def create_application(cmd, client, display_name, homepage=None, identifier_uris=None,  # pylint: disable=too-many-locals
                        available_to_other_tenants=False, password=None, reply_urls=None,
                        key_value=None, key_type=None, key_usage=None, start_date=None, end_date=None,
                        oauth2_allow_implicit_flow=None, required_resource_accesses=None, native_app=None,
                        credential_description=None, app_roles=None, optional_claims=None):
 
-    client = GraphClient(cmd.cli_ctx)
     # https://docs.microsoft.com/en-us/graph/api/application-post-applications?view=graph-rest-1.0&tabs=http
     body = {
         "displayName": display_name
     }
-    result = client.send("POST", "/applications", body=body)
-    return r
+    result = client.application_create(body=body)
+    return result
 
     client = _graph_client_factory(cmd.cli_ctx)
 
@@ -1194,11 +1190,11 @@ def delete_application(cmd, client, identifier):
 
 
 def _resolve_application(client, identifier):
-    result = client.send("GET", "/applications?$filter=identifierUris/any(s:s eq '{}')".format(identifier))
+    result = client.application_list(filter="identifierUris/any(s:s eq '{}')".format(identifier))
     if not result:
         if is_guid(identifier):
             # it is either app id or object id, let us verify
-            result = client.send("GET", "/applications?$filter=appId eq '{}'".format(identifier))
+            result = client.application_list(filter="appId eq '{}'".format(identifier))
         else:
             error = CLIError("Application '{}' doesn't exist".format(identifier))
             error.status_code = 404  # Make sure CLI returns 3
@@ -1250,30 +1246,36 @@ def _create_service_principal(cli_ctx, identifier, resolve_app=True):
     app_id = identifier
     if resolve_app:
         if is_guid(identifier):
-            result = list(client.applications.list(filter="appId eq '{}'".format(identifier)))
+            result = list(client.application_list(filter="appId eq '{}'".format(identifier)))
         else:
-            result = list(client.applications.list(
+            result = list(client.application_list(
                 filter="identifierUris/any(s:s eq '{}')".format(identifier)))
 
         try:
             if not result:  # assume we get an object id
-                result = [client.applications.get(identifier)]
-            app_id = result[0].app_id
+                result = [client.application_get(identifier)]
+            app_id = result[0]['appId']
         except GraphErrorException:
             pass  # fallback to appid (maybe from an external tenant?)
 
-    return client.service_principals.create(ServicePrincipalCreateParameters(app_id=app_id, account_enabled=True))
+    body = {
+        "appId": app_id,
+        "accountEnabled": True
+    }
+    return client.service_principal_create(body)
 
 
 def show_service_principal(client, identifier):
     object_id = _resolve_service_principal(client, identifier)
-    return client.get(object_id)
+    return client.service_principal_show(object_id)
 
 
 def delete_service_principal(cmd, identifier):
     from azure.cli.core._profile import Profile
     client = _graph_client_factory(cmd.cli_ctx)
-    sp_object_id = _resolve_service_principal(client.service_principals, identifier)
+    sp_object_id = _resolve_service_principal(client, identifier)
+    client.service_principal_delete(sp_object_id)
+    return
 
     app_object_id = None
     try:
@@ -1351,9 +1353,9 @@ def delete_service_principal_credential(cmd, identifier, key_id, cert=False):
 
 def _resolve_service_principal(client, identifier):
     # todo: confirm with graph team that a service principal name must be unique
-    result = list(client.list(filter="servicePrincipalNames/any(c:c eq '{}')".format(identifier)))
+    result = client.service_principal_list(filter="servicePrincipalNames/any(c:c eq '{}')".format(identifier))
     if result:
-        return result[0].object_id
+        return result[0]['id']
     if is_guid(identifier):
         return identifier  # assume an object id
     error = CLIError("Service principal '{}' doesn't exist".format(identifier))
