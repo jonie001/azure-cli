@@ -253,7 +253,7 @@ def list_role_assignments(cmd, assignee=None, role=None, resource_group_name=Non
     if principal_ids:
         try:
             principals = _get_object_stubs(graph_client, principal_ids)
-            principal_dics = {i.object_id: _get_displayable_name(i) for i in principals}
+            principal_dics = {i['id']: _get_displayable_name(i) for i in principals}
 
             for i in [r for r in results if not r.get('principalName')]:
                 i['principalName'] = ''
@@ -475,11 +475,14 @@ def _backfill_assignments_for_co_admins(cli_ctx, auth_client, assignee=None):
 
 
 def _get_displayable_name(graph_object):
-    if getattr(graph_object, 'user_principal_name', None):
-        return graph_object.user_principal_name
-    if getattr(graph_object, 'service_principal_names', None):
-        return graph_object.service_principal_names[0]
-    return graph_object.display_name or ''
+    # user
+    if 'userPrincipalName' in graph_object:
+        return graph_object['userPrincipalName']
+    # service principal
+    if 'servicePrincipalNames' in graph_object:
+        return graph_object['servicePrincipalNames'][0]
+    # group
+    return graph_object['displayName'] or ''
 
 
 def delete_role_assignments(cmd, ids=None, assignee=None, role=None, resource_group_name=None,
@@ -796,30 +799,32 @@ def create_application(cmd, client, display_name, homepage=None, identifier_uris
                        key_value=None, key_type=None, key_usage=None, start_date=None, end_date=None,
                        oauth2_allow_implicit_flow=None, required_resource_accesses=None, native_app=None,
                        credential_description=None, app_roles=None, optional_claims=None):
-
-    # https://docs.microsoft.com/en-us/graph/api/application-post-applications?view=graph-rest-1.0&tabs=http
-    body = {
-        "displayName": display_name
-    }
-    result = client.application_create(body=body)
-    return result
-
-    client = _graph_client_factory(cmd.cli_ctx)
+    # body = {
+    #     "displayName": display_name
+    # }
+    # result = client.application_create(body=body)
+    # return result
+    #
+    # client = _graph_client_factory(cmd.cli_ctx)
 
     graph_client = _graph_client_factory(cmd.cli_ctx)
     key_creds, password_creds, required_accesses = None, None, None
-    existing_apps = list_apps(cmd, display_name=display_name)
+    existing_apps = list_apps(cmd, client, display_name=display_name)
     if existing_apps:
         if identifier_uris:
-            existing_apps = [x for x in existing_apps if set(identifier_uris).issubset(set(x.identifier_uris))]
-        existing_apps = [x for x in existing_apps if x.display_name == display_name]
+            existing_apps = [x for x in existing_apps if set(identifier_uris).issubset(set(x['identifierUris']))]
+        existing_apps = [x for x in existing_apps if x['displayName'] == display_name]
         if native_app:
             existing_apps = [x for x in existing_apps if x.public_client]
         if len(existing_apps) > 1:
-            raise CLIError('More than one application have the same display name "{}", please remove '
-                           'them first'.format(', '.join([x.object_id for x in existing_apps])))
+            raise CLIError("More than one application have the same display name '{}': (id) {}, please remove "
+                           'them first.'.format(display_name, ', '.join([x['id'] for x in existing_apps])))
         if len(existing_apps) == 1:
-            logger.warning('Found an existing application instance of "%s". We will patch it', existing_apps[0].app_id)
+            logger.warning("Found an existing application instance: (id) %s. We will patch it.",
+                           existing_apps[0]['id'])
+            body = {
+
+            }
             param = update_application(existing_apps[0], display_name=display_name, homepage=homepage,
                                        identifier_uris=identifier_uris, password=password, reply_urls=reply_urls,
                                        key_value=key_value, key_type=key_type, key_usage=key_usage,
@@ -1067,6 +1072,9 @@ def update_application(instance, display_name=None, homepage=None,  # pylint: di
                        oauth2_allow_implicit_flow=None, required_resource_accesses=None,
                        credential_description=None, app_roles=None, optional_claims=None):
 
+    body = {
+
+    }
     # propagate the values
     app_patch_param = ApplicationUpdateParameters()
     properties = [attr for attr in dir(instance)
@@ -1176,16 +1184,14 @@ def _build_optional_claims(optional_claims):
 def show_application(cmd, client, identifier):
     client = GraphClient(cmd.cli_ctx)
     object_id = _resolve_application(client, identifier)
-    # https://docs.microsoft.com/en-us/graph/api/application-get
-    result = client.send("GET", "/applications/{id}".format(id=object_id))
+    result = client.application_get(object_id)
     return result
 
 
 def delete_application(cmd, client, identifier):
     client = GraphClient(cmd.cli_ctx)
     object_id = _resolve_application(client, identifier)
-    # https://docs.microsoft.com/en-us/graph/api/application-delete
-    client.send("DELETE", "/applications/{id}".format(id=object_id))
+    client.application_delete(id=object_id)
 
 
 def _resolve_application(client, identifier):
@@ -1846,12 +1852,14 @@ def _resolve_object_id_and_type(cli_ctx, assignee, fallback_to_object_id=False):
 
 
 def _get_object_stubs(graph_client, assignees):
-    from azure.graphrbac.models import GetObjectsParameters
     result = []
     assignees = list(assignees)  # callers could pass in a set
     for i in range(0, len(assignees), 1000):
-        params = GetObjectsParameters(include_directory_object_references=True, object_ids=assignees[i:i + 1000])
-        result += list(graph_client.objects.get_objects_by_object_ids(params))
+        body = {
+            "ids": assignees[i:i + 1000],
+            "types": ['directoryObject', 'directoryObjectPartnerReference']
+        }
+        result.append(list(graph_client.directory_object_get_by_ids(body)))
     return result
 
 

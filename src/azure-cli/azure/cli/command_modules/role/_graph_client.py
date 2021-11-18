@@ -82,7 +82,7 @@ class GraphClient:
         return result
 
     def service_principal_create(self, body):
-        # https://docs.microsoft.com/en-us/graph/api/application-post-applications
+        # https://docs.microsoft.com/en-us/graph/api/serviceprincipal-post-serviceprincipals
         result = self._send("POST", "/servicePrincipals", body=body)
         return result
 
@@ -109,4 +109,9 @@ class GraphClient:
     def signed_in_user_get(self):
         # https://docs.microsoft.com/en-us/graph/api/user-get
         result = self._send("GET", "/me")
+        return result
+
+    def directory_object_get_by_ids(self, body):
+        # https://docs.microsoft.com/en-us/graph/api/directoryobject-getbyids
+        result = self._send("POST", "/directoryObjects/getByIds", body=body)
         return result
