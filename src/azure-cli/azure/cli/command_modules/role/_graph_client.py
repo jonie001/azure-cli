@@ -127,6 +127,11 @@ class GraphClient:
         result = self._send("DELETE", "/servicePrincipals/{id}".format(id=id))
         return result
 
+    def service_principal_owner_list(self, id):
+        # https://docs.microsoft.com/en-us/graph/api/serviceprincipal-list-owners
+        result = self._send("GET", "/servicePrincipals/{id}/owners".format(id=id))
+        return result
+
     def owned_objects_list(self):
         # https://docs.microsoft.com/en-us/graph/api/user-list-ownedobjects
         result = self._send("GET", "/me/ownedObjects")

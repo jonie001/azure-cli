@@ -621,9 +621,8 @@ def list_apps(cmd, client, app_id=None, display_name=None, identifier_uri=None, 
     return result[:100]
 
 
-def list_application_owners(cmd, identifier):
-    client = _graph_client_factory(cmd.cli_ctx).applications
-    return client.list_owners(_resolve_application(client, identifier))
+def list_application_owners(client, identifier):
+    return client.application_owner_list(_resolve_application(client, identifier))
 
 
 def add_application_owner(cmd, owner_object_id, identifier):
@@ -1310,10 +1309,9 @@ def _get_app_object_id_from_sp_object_id(client, sp_object_id):
     raise CLIError("Can't find associated application id from '{}'".format(sp_object_id))
 
 
-def list_service_principal_owners(cmd, identifier):
-    client = _graph_client_factory(cmd.cli_ctx)
-    sp_object_id = _resolve_service_principal(client.service_principals, identifier)
-    return client.service_principals.list_owners(sp_object_id)
+def list_service_principal_owners(client, identifier):
+    sp_object_id = _resolve_service_principal(client, identifier)
+    return client.service_principal_owner_list(sp_object_id)
 
 
 def list_service_principal_credentials(cmd, identifier, cert=False):

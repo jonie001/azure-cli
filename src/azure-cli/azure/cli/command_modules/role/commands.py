@@ -184,7 +184,7 @@ def load_command_table(self, _):
         g.custom_command('credential list', 'list_service_principal_credentials')
         g.custom_command('credential delete', 'delete_service_principal_credential')
 
-    with self.command_group('ad app owner', exception_handler=graph_err_handler) as g:
+    with self.command_group('ad app owner', client_factory=get_graph_client, exception_handler=graph_err_handler) as g:
         g.custom_command('list', 'list_application_owners')
         g.custom_command('add', 'add_application_owner')
         g.custom_command('remove', 'remove_application_owner')
@@ -198,7 +198,7 @@ def load_command_table(self, _):
         g.generic_update_command('update', getter_name='show_service_principal', getter_type=role_custom,
                                  setter_name='patch_service_principal', setter_type=role_custom)
 
-    with self.command_group('ad sp owner', exception_handler=graph_err_handler) as g:
+    with self.command_group('ad sp owner', client_factory=get_graph_client, exception_handler=graph_err_handler) as g:
         g.custom_command('list', 'list_service_principal_owners')
 
     # RBAC related
