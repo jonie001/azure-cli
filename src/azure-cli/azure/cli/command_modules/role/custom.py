@@ -861,7 +861,12 @@ def create_application(cmd, client, display_name, homepage=None, identifier_uris
                                                    app_roles=app_roles,
                                                    optional_claims=optional_claims)
     body = {
-        'displayName': display_name
+        "displayName": display_name,
+        "identifierUris": identifier_uris,
+        "web": {
+            "redirectUris": reply_urls or [],
+            "homePageUrl": homepage,
+        }
     }
     try:
         result = graph_client.application_create(body)

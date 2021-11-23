@@ -26,6 +26,14 @@ def transform_assignment_list(result):
                          ('Scope', r['scope'])]) for r in result]
 
 
+def transform_application(result):
+    from knack.output import _TableOutput
+    _TableOutput.SKIP_KEYS.remove('id')
+
+    selected_keys = ('id', 'appId', 'displayName', 'createdDateTime')
+    return [{k: r.get(k) for k in selected_keys} for r in result]
+
+
 def transform_graph_objects_with_cred(result):
     # here we will convert utf16 encoded custom key id back to the plain text
     # we will handle single object from "show" cmd, object list from "list" cmd, and cred object itself
@@ -149,7 +157,7 @@ def load_command_table(self, _):
                             exception_handler=graph_err_handler, transform=transform_graph_objects_with_cred) as g:
         g.custom_command('create', 'create_application')
         g.custom_command('delete', 'delete_application')
-        g.custom_command('list', 'list_apps')
+        g.custom_command('list', 'list_apps', table_transformer=transform_application)
         g.custom_show_command('show', 'show_application')
         g.custom_command('permission grant', 'grant_application')
         g.custom_command('permission list', 'list_permissions')
