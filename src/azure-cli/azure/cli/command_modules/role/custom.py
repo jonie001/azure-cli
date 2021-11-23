@@ -1723,14 +1723,14 @@ def reset_service_principal_credential(cmd, name, password=None, create_cert=Fal
 
     # look for the existing application
     query_exp = "servicePrincipalNames/any(x:x eq \'{0}\') or displayName eq '{0}'".format(name)
-    aad_sps = list(client.service_principals.list(filter=query_exp))
+    aad_sps = list(client.service_principal_list(filter=query_exp))
 
     if len(aad_sps) > 1:
         raise CLIError(
             'more than one entry matches the name, please provide unique names like '
             'app id guid, or app id uri')
-    app = (show_application(client.applications, aad_sps[0].app_id) if aad_sps else
-           show_application(client.applications, name))  # possible there is no SP created for the app
+    app = (show_application(client, aad_sps[0]['appId']) if aad_sps else
+           show_application(client, name))  # possible there is no SP created for the app
 
     if not app:
         raise CLIError("can't find an application matching '{}'".format(name))
@@ -1749,21 +1749,30 @@ def reset_service_principal_credential(cmd, name, password=None, create_cert=Fal
     app_creds = None
     cert_creds = None
 
-    custom_key_identifier = None
+    display_name = None
     if credential_description and password:
-        custom_key_identifier = _encode_custom_key_description(credential_description)
+        display_name = credential_description
 
     if password:
-        app_creds = []
-        if append:
-            app_creds = list(client.applications.list_password_credentials(app.object_id))
-        app_creds.append(PasswordCredential(
-            start_date=app_start_date,
-            end_date=app_end_date,
-            key_id=str(_gen_guid()),
-            value=password,
-            custom_key_identifier=custom_key_identifier
-        ))
+        body = {
+            "passwordCredential": {
+                "startDateTime": app_start_date.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                "endDateTime": app_end_date.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                "displayName": display_name
+            }
+        }
+        result = client.application_password_add(app['id'], body)
+        # app_creds = []
+        # if append:
+        #     app_creds = list(client.applications.list_password_credentials(app.object_id))
+        # app_creds.append(PasswordCredential(
+        #     start_date=app_start_date,
+        #     end_date=app_end_date,
+        #     key_id=str(_gen_guid()),
+        #     value=password,
+        #     custom_key_identifier=custom_key_identifier
+        # ))
+        return result
 
     if public_cert_string:
         cert_creds = []
@@ -1779,20 +1788,27 @@ def reset_service_principal_credential(cmd, name, password=None, create_cert=Fal
             custom_key_identifier=custom_key_identifier
         ))
 
-    app_patch_param = ApplicationUpdateParameters(password_credentials=app_creds, key_credentials=cert_creds)
+    for cred in app['passwordCredentials']:
+        body = {
+            "keyId": cred['keyId']
+        }
+        client.application_password_remove(app['id'], body)
 
-    client.applications.patch(app.object_id, app_patch_param)
-
-    result = {
-        'appId': app.app_id,
-        'password': password,
-        'name': name,
-        'tenant': client.config.tenant_id
-    }
-    if cert_file:
-        result['fileWithCertAndPrivateKey'] = cert_file
-
-    logger.warning(CREDENTIAL_WARNING)
+    # app_patch_param = ApplicationUpdateParameters(password_credentials=app_creds, key_credentials=cert_creds)
+    #
+    # client.applications.patch(app.object_id, app_patch_param)
+    #
+    # result = {
+    #     'appId': app.app_id,
+    #     'password': password,
+    #     'name': name,
+    #     'tenant': client.config.tenant_id
+    # }
+    # if cert_file:
+    #     result['fileWithCertAndPrivateKey'] = cert_file
+    #
+    # logger.warning(CREDENTIAL_WARNING)
+    result = None
     return result
 
 

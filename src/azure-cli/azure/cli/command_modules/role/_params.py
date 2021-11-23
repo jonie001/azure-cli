@@ -43,7 +43,7 @@ def load_arguments(self, _):
         # TODO: Update these with **enum_choice_list(...) when SDK supports proper enums
         c.argument('key_type', help='the type of the key credentials associated with the application', arg_type=get_enum_type(['AsymmetricX509Cert', 'Password', 'Symmetric'], default='AsymmetricX509Cert'))
         c.argument('key_usage', help='the usage of the key credentials associated with the application.', arg_type=get_enum_type(['Sign', 'Verify'], default='Verify'))
-        c.argument('password', help="app password, aka 'client secret'")
+        c.argument('password', help="app password, aka 'client secret'", arg_type=get_three_state_flag())
         c.argument('oauth2_allow_implicit_flow', arg_type=get_three_state_flag(), help='whether to allow implicit grant flow for OAuth2')
         c.argument('required_resource_accesses', type=validate_file_or_dict,
                    help="resource scopes and roles the application requires access to. Should be in manifest json format. See examples below for details")

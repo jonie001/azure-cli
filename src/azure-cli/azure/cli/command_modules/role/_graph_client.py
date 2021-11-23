@@ -97,14 +97,14 @@ class GraphClient:
         result = self._send("DELETE", "/applications/{id}/owners/{id}/$ref".format(id=id))
         return result
 
-    def application_password_create(self, id):
+    def application_password_add(self, id, body):
         # https://docs.microsoft.com/en-us/graph/api/application-addpassword
-        result = self._send("POST", "/applications/{id}/addPassword".format(id=id))
+        result = self._send("POST", "/applications/{id}/addPassword".format(id=id), body=body)
         return result
 
-    def application_password_delete(self, id):
+    def application_password_remove(self, id, body):
         # https://docs.microsoft.com/en-us/graph/api/application-addpassword
-        result = self._send("POST", "/applications/{id}/removePassword".format(id=id))
+        result = self._send("POST", "/applications/{id}/removePassword".format(id=id), body=body)
         return result
 
     def service_principal_create(self, body):
