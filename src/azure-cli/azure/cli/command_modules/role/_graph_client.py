@@ -24,14 +24,35 @@ class GraphClient:
 
         if body:
             body = json.dumps(body)
-        r = send_raw_request(self.cli_ctx, method, url, resource=self.resource, uri_parameters=param, body=body)
-        if r.text:
-            dic = r.json()
-            if 'value' in dic:
-                return dic['value']
-            return r.json()
-        else:
-            return None
+
+        list_result = []
+        is_list_result = False
+
+        while True:
+            r = send_raw_request(self.cli_ctx, method, url, resource=self.resource, uri_parameters=param, body=body)
+            if r.text:
+                dic = r.json()
+
+                # The result is a list. Add value to list_result.
+                if 'value' in dic:
+                    is_list_result = True
+                    list_result.extend(dic['value'])
+
+                # Follow nextLink if available
+                if '@odata.nextLink' in dic:
+                    url = dic['@odata.nextLink']
+                    continue
+
+                # Result a list
+                if is_list_result:
+                    # 'value' can be empty list [], so we can't determine if the result is a list only by
+                    # bool(list_result)
+                    return list_result
+
+                # Return a single object
+                return r.json()
+            else:
+                return None
 
     # id is python built-in name: https://docs.python.org/3/library/functions.html#id
     # filter is python built-in name: https://docs.python.org/3/library/functions.html#filter
@@ -54,6 +75,11 @@ class GraphClient:
     def application_delete(self, id):
         # https://docs.microsoft.com/en-us/graph/api/application-delete
         result = self._send("DELETE", "/applications/{id}".format(id=id))
+        return result
+
+    def application_patch(self, id, body):
+        # https://docs.microsoft.com/en-us/graph/api/application-update
+        result = self._send("PATCH", "/applications/{id}".format(id=id), body=body)
         return result
 
     def application_owner_add(self, id, body):

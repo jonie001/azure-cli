@@ -822,19 +822,16 @@ def create_application(cmd, client, display_name, homepage=None, identifier_uris
         if len(existing_apps) == 1:
             logger.warning("Found an existing application instance: (id) %s. We will patch it.",
                            existing_apps[0]['id'])
-            body = {
-
-            }
-            param = update_application(existing_apps[0], display_name=display_name, homepage=homepage,
-                                       identifier_uris=identifier_uris, password=password, reply_urls=reply_urls,
-                                       key_value=key_value, key_type=key_type, key_usage=key_usage,
-                                       start_date=start_date, end_date=end_date,
-                                       available_to_other_tenants=available_to_other_tenants,
-                                       oauth2_allow_implicit_flow=oauth2_allow_implicit_flow,
-                                       required_resource_accesses=required_resource_accesses,
-                                       credential_description=credential_description, app_roles=app_roles)
-            patch_application(cmd, existing_apps[0].app_id, param)
-            return show_application(graph_client.applications, existing_apps[0].app_id)
+            body = update_application(existing_apps[0], display_name=display_name, homepage=homepage,
+                                      identifier_uris=identifier_uris, password=password, reply_urls=reply_urls,
+                                      key_value=key_value, key_type=key_type, key_usage=key_usage,
+                                      start_date=start_date, end_date=end_date,
+                                      available_to_other_tenants=available_to_other_tenants,
+                                      oauth2_allow_implicit_flow=oauth2_allow_implicit_flow,
+                                      required_resource_accesses=required_resource_accesses,
+                                      credential_description=credential_description, app_roles=app_roles)
+            patch_application(cmd, existing_apps[0]['id'], body)
+            return show_application(graph_client, existing_apps[0]['appId'])
     if not identifier_uris:
         identifier_uris = []
     if native_app:
@@ -863,9 +860,11 @@ def create_application(cmd, client, display_name, homepage=None, identifier_uris
                                                    required_resource_access=required_accesses,
                                                    app_roles=app_roles,
                                                    optional_claims=optional_claims)
-
+    body = {
+        'displayName': display_name
+    }
     try:
-        result = graph_client.applications.create(app_create_param)
+        result = graph_client.application_create(body)
     except GraphErrorException as ex:
         if 'insufficient privileges' in str(ex).lower():
             link = 'https://docs.microsoft.com/azure/azure-resource-manager/resource-group-create-service-principal-portal'  # pylint: disable=line-too-long
@@ -1071,12 +1070,8 @@ def update_application(instance, display_name=None, homepage=None,  # pylint: di
                        key_type=None, key_usage=None, start_date=None, end_date=None, available_to_other_tenants=None,
                        oauth2_allow_implicit_flow=None, required_resource_accesses=None,
                        credential_description=None, app_roles=None, optional_claims=None):
-
-    body = {
-
-    }
     # propagate the values
-    app_patch_param = ApplicationUpdateParameters()
+    app_patch_param = {}
     properties = [attr for attr in dir(instance)
                   if not callable(getattr(instance, attr)) and
                   not attr.startswith("_") and attr != 'additional_properties' and hasattr(app_patch_param, attr)]
@@ -1089,8 +1084,8 @@ def update_application(instance, display_name=None, homepage=None,  # pylint: di
     if any([password, key_value]):
         password_creds, key_creds = _build_application_creds(password, key_value, key_type, key_usage, start_date,
                                                              end_date, credential_description)
-    app_patch_param.key_credentials = key_creds
-    app_patch_param.password_credentials = password_creds
+    # app_patch_param.key_credentials = key_creds
+    # app_patch_param.password_credentials = password_creds
 
     if required_resource_accesses:
         app_patch_param.required_resource_access = _build_application_accesses(required_resource_accesses)
@@ -1101,26 +1096,27 @@ def update_application(instance, display_name=None, homepage=None,  # pylint: di
     if optional_claims:
         app_patch_param.optional_claims = _build_optional_claims(optional_claims)
 
-    if available_to_other_tenants is not None:
-        app_patch_param.available_to_other_tenants = available_to_other_tenants
-    if oauth2_allow_implicit_flow is not None:
-        app_patch_param.oauth2_allow_implicit_flow = oauth2_allow_implicit_flow
+    # if available_to_other_tenants is not None:
+    #     app_patch_param.available_to_other_tenants = available_to_other_tenants
+    # if oauth2_allow_implicit_flow is not None:
+    #     app_patch_param.oauth2_allow_implicit_flow = oauth2_allow_implicit_flow
     if identifier_uris is not None:
-        app_patch_param.identifier_uris = identifier_uris
+        app_patch_param['identifierUris'] = identifier_uris
     if display_name is not None:
-        app_patch_param.display_name = display_name
+        app_patch_param['displayName'] = display_name
+
     if reply_urls is not None:
-        app_patch_param.reply_urls = reply_urls
+        app_patch_param.setdefault('web', {})['redirectUris'] = reply_urls
     if homepage is not None:
-        app_patch_param.homepage = homepage
+        app_patch_param.setdefault('web', {})['homePageUrl'] = homepage
 
     return app_patch_param
 
 
 def patch_application(cmd, identifier, parameters):
     graph_client = _graph_client_factory(cmd.cli_ctx)
-    object_id = _resolve_application(graph_client.applications, identifier)
-    return graph_client.applications.patch(object_id, parameters)
+    object_id = _resolve_application(graph_client, identifier)
+    return graph_client.application_patch(object_id, parameters)
 
 
 def patch_service_principal(cmd, identifier, parameters):
@@ -1181,15 +1177,13 @@ def _build_optional_claims(optional_claims):
     return result
 
 
-def show_application(cmd, client, identifier):
-    client = GraphClient(cmd.cli_ctx)
+def show_application(client, identifier):
     object_id = _resolve_application(client, identifier)
     result = client.application_get(object_id)
     return result
 
 
-def delete_application(cmd, client, identifier):
-    client = GraphClient(cmd.cli_ctx)
+def delete_application(client, identifier):
     object_id = _resolve_application(client, identifier)
     client.application_delete(id=object_id)
 
