@@ -1870,9 +1870,11 @@ def _get_object_stubs(graph_client, assignees):
     for i in range(0, len(assignees), 1000):
         body = {
             "ids": assignees[i:i + 1000],
-            "types": ['directoryObject', 'directoryObjectPartnerReference']
+            # According to https://docs.microsoft.com/en-us/graph/api/directoryobject-getbyids,
+            # directoryObject should work as all of the resource types defined in the directory, but it doesn't.
+            "types": ['user', 'group', 'servicePrincipal', 'directoryObjectPartnerReference']
         }
-        result.append(list(graph_client.directory_object_get_by_ids(body)))
+        result.extend(list(graph_client.directory_object_get_by_ids(body)))
     return result
 
 
