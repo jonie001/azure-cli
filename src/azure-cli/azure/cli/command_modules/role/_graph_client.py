@@ -4,6 +4,7 @@
 # --------------------------------------------------------------------------------------------
 import json
 
+from azure.cli.core._profile import Profile
 from azure.cli.core.util import send_raw_request
 from azure.cli.core.auth.util import resource_to_scopes
 
@@ -11,6 +12,7 @@ from azure.cli.core.auth.util import resource_to_scopes
 class GraphClient:
     def __init__(self, cli_ctx):
         self.cli_ctx = cli_ctx
+        self.tenant = Profile(cli_ctx).get_login_credentials()[2]
         self.scopes = resource_to_scopes(cli_ctx.cloud.endpoints.microsoft_graph_resource_id)
 
         # https://graph.microsoft.com/ (AzureCloud)
@@ -103,7 +105,7 @@ class GraphClient:
         return result
 
     def application_password_remove(self, id, body):
-        # https://docs.microsoft.com/en-us/graph/api/application-addpassword
+        # https://docs.microsoft.com/en-us/graph/api/application-removepassword
         result = self._send("POST", "/applications/{id}/removePassword".format(id=id), body=body)
         return result
 

@@ -13,7 +13,6 @@ import uuid
 from dateutil.relativedelta import relativedelta
 import dateutil.parser
 
-from msrest.serialization import TZ_UTC
 from msrestazure.azure_exceptions import CloudError
 
 from knack.log import get_logger
@@ -807,7 +806,7 @@ def create_application(cmd, client, display_name, homepage=None, identifier_uris
     # client = _graph_client_factory(cmd.cli_ctx)
 
     graph_client = _graph_client_factory(cmd.cli_ctx)
-    key_creds, password_creds, required_accesses = None, None, None
+    key_credentials, password_creds, required_accesses = None, None, None
     existing_apps = list_apps(cmd, client, display_name=display_name)
     if existing_apps:
         if identifier_uris:
@@ -837,8 +836,8 @@ def create_application(cmd, client, display_name, homepage=None, identifier_uris
         if identifier_uris:
             raise CLIError("'--identifier-uris' is not required for creating a native application")
     else:
-        password_creds, key_creds = _build_application_creds(password, key_value, key_type, key_usage,
-                                                             start_date, end_date, credential_description)
+        key_credentials = _build_key_credentials(
+            key_value, key_type, key_usage, start_date, end_date, credential_description)
 
     if required_resource_accesses:
         required_accesses = _build_application_accesses(required_resource_accesses)
@@ -853,7 +852,7 @@ def create_application(cmd, client, display_name, homepage=None, identifier_uris
                                                    identifier_uris=identifier_uris,
                                                    homepage=homepage,
                                                    reply_urls=reply_urls,
-                                                   key_credentials=key_creds,
+                                                   key_credentials=key_credentials,
                                                    password_credentials=password_creds,
                                                    oauth2_allow_implicit_flow=oauth2_allow_implicit_flow,
                                                    required_resource_access=required_accesses,
@@ -865,7 +864,8 @@ def create_application(cmd, client, display_name, homepage=None, identifier_uris
         "web": {
             "redirectUris": reply_urls or [],
             "homePageUrl": homepage,
-        }
+        },
+        "keyCredentials": key_credentials
     }
     try:
         result = graph_client.application_create(body)
@@ -1086,8 +1086,8 @@ def update_application(instance, display_name=None, homepage=None,  # pylint: di
     # by time precision difference between SDK and Graph Services
     password_creds, key_creds = None, None
     if any([password, key_value]):
-        password_creds, key_creds = _build_application_creds(password, key_value, key_type, key_usage, start_date,
-                                                             end_date, credential_description)
+        password_creds, key_creds = _build_key_credentials(password, key_value, key_type, key_usage, start_date,
+                                                           end_date, credential_description)
     # app_patch_param.key_credentials = key_creds
     # app_patch_param.password_credentials = password_creds
 
@@ -1206,10 +1206,11 @@ def _resolve_application(client, identifier):
     return result[0]['id'] if result else identifier
 
 
-def _build_application_creds(password=None, key_value=None, key_type=None, key_usage=None,
-                             start_date=None, end_date=None, key_description=None):
-    if password and key_value:
-        raise CLIError('specify either --password or --key-value, but not both.')
+def _build_key_credentials(key_value=None, key_type=None, key_usage=None,
+                           start_date=None, end_date=None, key_description=None):
+    if not key_value:
+        # No key credential should be set
+        return []
 
     if not start_date:
         start_date = datetime.datetime.utcnow()
@@ -1222,22 +1223,25 @@ def _build_application_creds(password=None, key_value=None, key_type=None, key_u
         end_date = dateutil.parser.parse(end_date)
 
     custom_key_id = None
-    if key_description and password:
+    if key_description:
         custom_key_id = _encode_custom_key_description(key_description)
 
     key_type = key_type or 'AsymmetricX509Cert'
     key_usage = key_usage or 'Verify'
 
-    password_creds = None
-    key_creds = None
-    if password:
-        password_creds = [PasswordCredential(start_date=start_date, end_date=end_date, key_id=str(_gen_guid()),
-                                             value=password, custom_key_identifier=custom_key_id)]
-    elif key_value:
-        key_creds = [KeyCredential(start_date=start_date, end_date=end_date, key_id=str(_gen_guid()), value=key_value,
-                                   usage=key_usage, type=key_type, custom_key_identifier=custom_key_id)]
-
-    return (password_creds, key_creds)
+    # https://docs.microsoft.com/en-us/graph/api/resources/keycredential
+    key_credential = {
+        "@odata.type": "#microsoft.graph.keyCredential",
+        "customKeyIdentifier": custom_key_id,
+        "displayName": "String",
+        "endDateTime": end_date.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        "key": key_value,
+        "keyId": str(_gen_guid()),
+        "startDateTime": start_date.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        "type": key_type,
+        "usage": key_usage
+    }
+    return [key_credential]
 
 
 def create_service_principal(cmd, identifier):
@@ -1365,20 +1369,12 @@ def _resolve_service_principal(client, identifier):
     raise error
 
 
-def _process_service_principal_creds(cli_ctx, years, app_start_date, app_end_date, cert, create_cert,
-                                     password, keyvault):
-
-    if not any((cert, create_cert, password, keyvault)):
-        # 1 - Simplest scenario. Use random password
-        return _random_password(34), None, None, None, None
-
-    if password:
-        # 2 - Password supplied -- no certs
-        return password, None, None, None, None
-
+def _process_service_principal_certificate(cli_ctx, years, app_start_date, app_end_date, cert, create_cert, keyvault):
     # The rest of the scenarios involve certificates
     public_cert_string = None
     cert_file = None
+    cert_start_date = None
+    cert_end_date = None
 
     if cert and not keyvault:
         # 3 - User-supplied public cert data
@@ -1403,7 +1399,7 @@ def _process_service_principal_creds(cli_ctx, years, app_start_date, app_end_dat
         cert_start_date = cert_obj.attributes.not_before  # pylint: disable=no-member
         cert_end_date = cert_obj.attributes.expires  # pylint: disable=no-member
 
-    return (password, public_cert_string, cert_file, cert_start_date, cert_end_date)
+    return public_cert_string, cert_file, cert_start_date, cert_end_date
 
 
 def _error_caused_by_role_assignment_exists(ex):
@@ -1451,26 +1447,42 @@ def create_service_principal_for_rbac(
         query_exp = "displayName eq '{}'".format(name)
         existing_sps = list(graph_client.service_principals.list(filter=query_exp))
 
-    app_start_date = datetime.datetime.now(TZ_UTC)
+    app_start_date = datetime.datetime.now(datetime.timezone.utc)
     app_end_date = app_start_date + relativedelta(years=years or 1)
 
-    password, public_cert_string, cert_file, cert_start_date, cert_end_date = \
-        _process_service_principal_creds(cmd.cli_ctx, years, app_start_date, app_end_date, cert, create_cert,
-                                         None, keyvault)
+    use_cert = False
+    public_cert_string = None
+    password = None
+    cert_file = None
 
-    app_start_date, app_end_date, cert_start_date, cert_end_date = \
-        _validate_app_dates(app_start_date, app_end_date, cert_start_date, cert_end_date)
+    if cert or create_cert:
+        # Key credential is created *at the same time* of application creation.
+        # https://docs.microsoft.com/en-us/graph/application-rollkey-prooftoken
+        use_cert = True
+        public_cert_string, cert_file, cert_start_date, cert_end_date = \
+            _process_service_principal_certificate(
+                cmd.cli_ctx, years, app_start_date, app_end_date, cert, create_cert, keyvault)
+
+        app_start_date, app_end_date, cert_start_date, cert_end_date = \
+            _validate_app_dates(app_start_date, app_end_date, cert_start_date, cert_end_date)
 
     aad_application = create_application(cmd,
-                                         display_name=app_display_name,
+                                         graph_client,
+                                         app_display_name,
                                          available_to_other_tenants=False,
-                                         password=password,
                                          key_value=public_cert_string,
                                          start_date=app_start_date,
-                                         end_date=app_end_date,
-                                         credential_description='rbac')
+                                         end_date=app_end_date)
     # pylint: disable=no-member
-    app_id = aad_application.app_id
+    app_id = aad_application['appId']
+    logger.warning("Created application: appId=%s, id=%s, displayName=%s",
+                   app_id, aad_application['id'], aad_application['displayName'])
+
+    # Password credential is created *after* application creation.
+    # https://docs.microsoft.com/en-us/graph/api/resources/passwordcredential
+    if not use_cert:
+        result = _application_add_password(graph_client, aad_application, app_start_date, app_end_date, 'rbac')
+        password = result['secretText']
 
     # retry till server replication is done
     aad_sp = existing_sps[0] if existing_sps else None
@@ -1494,7 +1506,9 @@ def create_service_principal_for_rbac(
                         app_id, ex.response.headers
                         if hasattr(ex, 'response') else ex)  # pylint: disable=no-member
                     raise
-    sp_oid = aad_sp.object_id
+    sp_app_id = aad_sp['appId']
+    sp_oid = aad_sp['id']
+    logger.warning("Created service principal: appId=%s, id=%s", sp_app_id, sp_oid)
 
     # retry while server replication is done
     if not skip_assignment:
@@ -1542,7 +1556,7 @@ def create_service_principal_for_rbac(
         'password': password,
         'name': app_id,
         'displayName': app_display_name,
-        'tenant': graph_client.config.tenant_id
+        'tenant': graph_client.tenant
     }
     if cert_file:
         logger.warning(
@@ -1704,12 +1718,12 @@ def _get_public(x509):
     return stripped
 
 
-def reset_service_principal_credential(cmd, name, password=None, create_cert=False, cert=None, years=None,
-                                       end_date=None, keyvault=None, append=False, credential_description=None):
+def reset_service_principal_credential(cmd, name, create_cert=False, cert=None, years=None,
+                                       end_date=None, keyvault=None, append=False, display_name=None):
     client = _graph_client_factory(cmd.cli_ctx)
 
     # pylint: disable=no-member
-    app_start_date = datetime.datetime.now(TZ_UTC)
+    app_start_date = datetime.datetime.now(datetime.timezone.utc)
     if years is not None and end_date is not None:
         raise CLIError('usage error: --years | --end-date')
     if end_date is None:
@@ -1718,7 +1732,7 @@ def reset_service_principal_credential(cmd, name, password=None, create_cert=Fal
     else:
         app_end_date = dateutil.parser.parse(end_date)
         if app_end_date.tzinfo is None:
-            app_end_date = app_end_date.replace(tzinfo=TZ_UTC)
+            app_end_date = app_end_date.replace(tzinfo=datetime.timezone.utc)
         years = (app_end_date - app_start_date).days / 365
 
     # look for the existing application
@@ -1739,29 +1753,18 @@ def reset_service_principal_credential(cmd, name, password=None, create_cert=Fal
     public_cert_string = None
     cert_file = None
 
-    password, public_cert_string, cert_file, cert_start_date, cert_end_date = \
-        _process_service_principal_creds(cmd.cli_ctx, years, app_start_date, app_end_date, cert, create_cert,
-                                         password, keyvault)
-
-    app_start_date, app_end_date, cert_start_date, cert_end_date = \
-        _validate_app_dates(app_start_date, app_end_date, cert_start_date, cert_end_date)
-
     app_creds = None
     cert_creds = None
 
-    display_name = None
-    if credential_description and password:
-        display_name = credential_description
-
-    if password:
-        body = {
-            "passwordCredential": {
-                "startDateTime": app_start_date.strftime('%Y-%m-%dT%H:%M:%SZ'),
-                "endDateTime": app_end_date.strftime('%Y-%m-%dT%H:%M:%SZ'),
-                "displayName": display_name
-            }
-        }
-        result = client.application_password_add(app['id'], body)
+    # if password:
+    #     body = {
+    #         "passwordCredential": {
+    #             "startDateTime": app_start_date.strftime('%Y-%m-%dT%H:%M:%SZ'),
+    #             "endDateTime": app_end_date.strftime('%Y-%m-%dT%H:%M:%SZ'),
+    #             "displayName": display_name
+    #         }
+    #     }
+    #     result = client.application_password_add(app['id'], body)
         # app_creds = []
         # if append:
         #     app_creds = list(client.applications.list_password_credentials(app.object_id))
@@ -1772,27 +1775,40 @@ def reset_service_principal_credential(cmd, name, password=None, create_cert=Fal
         #     value=password,
         #     custom_key_identifier=custom_key_identifier
         # ))
-        return result
+        # return result
 
-    if public_cert_string:
-        cert_creds = []
-        if append:
-            cert_creds = list(client.applications.list_key_credentials(app.object_id))
-        cert_creds.append(KeyCredential(
-            start_date=app_start_date,
-            end_date=app_end_date,
-            value=public_cert_string,
-            key_id=str(_gen_guid()),
-            usage='Verify',
-            type='AsymmetricX509Cert',
-            custom_key_identifier=custom_key_identifier
-        ))
+    if not append:
+        # Delete all existing credentials
+        for cred in app['passwordCredentials']:
+            body = {
+                "keyId": cred['keyId']
+            }
+            client.application_password_remove(app['id'], body)
 
-    for cred in app['passwordCredentials']:
-        body = {
-            "keyId": cred['keyId']
-        }
-        client.application_password_remove(app['id'], body)
+    # Be default, add password
+    if not cert and not create_cert:
+        _application_add_password(client, app, app_start_date, app_end_date, display_name)
+
+    else:
+        password, public_cert_string, cert_file, cert_start_date, cert_end_date = \
+            _process_service_principal_certificate(cmd.cli_ctx, years, app_start_date, app_end_date, cert, create_cert,
+                                                   keyvault)
+
+        app_start_date, app_end_date, cert_start_date, cert_end_date = \
+            _validate_app_dates(app_start_date, app_end_date, cert_start_date, cert_end_date)
+        if public_cert_string:
+            cert_creds = []
+            if append:
+                cert_creds = list(client.applications.list_key_credentials(app.object_id))
+            cert_creds.append(KeyCredential(
+                start_date=app_start_date,
+                end_date=app_end_date,
+                value=public_cert_string,
+                key_id=str(_gen_guid()),
+                usage='Verify',
+                type='AsymmetricX509Cert',
+                custom_key_identifier=custom_key_identifier
+            ))
 
     # app_patch_param = ApplicationUpdateParameters(password_credentials=app_creds, key_credentials=cert_creds)
     #
@@ -1808,7 +1824,6 @@ def reset_service_principal_credential(cmd, name, password=None, create_cert=Fal
     #     result['fileWithCertAndPrivateKey'] = cert_file
     #
     # logger.warning(CREDENTIAL_WARNING)
-    result = None
     return result
 
 
@@ -1938,4 +1953,17 @@ def list_user_assigned_identities(cmd, resource_group_name=None):
 
 def show_signed_in_user(client):
     result = client.signed_in_user_get()
+    return result
+
+
+def _application_add_password(client, app, start_datetime, end_datetime, display_name):
+    """Let graph service generate a random password."""
+    body = {
+        "passwordCredential": {
+            "startDateTime": start_datetime.strftime('%Y-%m-%dT%H:%M:%SZ'),
+            "endDateTime": end_datetime.strftime('%Y-%m-%dT%H:%M:%SZ'),
+            "displayName": display_name
+        }
+    }
+    result = client.application_password_add(app['id'], body)
     return result

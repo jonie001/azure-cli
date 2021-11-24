@@ -96,6 +96,9 @@ helps['ad app credential reset'] = """
 type: command
 short-summary: Append or overwrite an application's password or certificate credentials
 long-summary: >-
+    By default, this command clears all passwords and keys, and let graph service generate a password credential.
+
+
     The output includes credentials that you must protect. Be sure that you do not include these credentials
     in your code or check the credentials into your source control. As an alternative, consider using
     [managed identities](https://aka.ms/azadsp-managed-identities) if available to avoid the need to use credentials.
