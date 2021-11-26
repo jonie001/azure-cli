@@ -55,14 +55,23 @@ examples:
             "idToken": [
                 {
                     "name": "auth_time",
-                    "source": null,
                     "essential": false
                 }
             ],
             "accessToken": [
                 {
-                    "name": "email",
-                    "source": null,
+                    "name": "ipaddr",
+                    "essential": false
+                }
+            ],
+            "saml2Token": [
+                {
+                    "name": "upn",
+                    "essential": false
+                },
+                {
+                    "name": "extension_ab603c56068041afb2f6832e2a17e237_skypeId",
+                    "source": "user",
                     "essential": false
                 }
             ]
@@ -281,14 +290,23 @@ examples:
             "idToken": [
                 {
                     "name": "auth_time",
-                    "source": null,
                     "essential": false
                 }
             ],
             "accessToken": [
                 {
-                    "name": "email",
-                    "source": null,
+                    "name": "ipaddr",
+                    "essential": false
+                }
+            ],
+            "saml2Token": [
+                {
+                    "name": "upn",
+                    "essential": false
+                },
+                {
+                    "name": "extension_ab603c56068041afb2f6832e2a17e237_skypeId",
+                    "source": "user",
                     "essential": false
                 }
             ]

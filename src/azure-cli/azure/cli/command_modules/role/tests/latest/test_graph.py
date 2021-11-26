@@ -154,11 +154,23 @@ lBMWCjI8gO6W8YQMu7AH""".replace('\n', '')
 
 class ApplicationSetScenarioTest(ScenarioTest):
 
-    def test_application_set_scenario(self):
-        name = self.create_random_name(prefix='cli-graph', length=14)
+    def test_application_scenario(self):
+        display_name = self.create_random_name(prefix='cli-test-graph-app', length=24)
+
+        # identifierUris must be on verified domain
+        # https://docs.microsoft.com/en-us/azure/active-directory/develop/reference-breaking-changes#appid-uri-in-single-tenant-applications-will-require-use-of-default-scheme-or-verified-domains
+
+        # Example: xxx_microsoft.com#EXT#@AzureSDKTeam.onmicrosoft.com
+        user_principal_mame = self.cmd('ad signed-in-user show --query userPrincipalName').get_output_in_json()
+
+        # Example: AzureSDKTeam.onmicrosoft.com
+        domain = user_principal_mame.split('@')[1]
+        identifier_uri = f'https://{domain}/{display_name}'
+
         self.kwargs.update({
-            'app': 'http://' + name,
-            'name': name,
+            'identifier_uri': identifier_uri,
+            'homepage': 'https://myapp.com/',
+            'display_name': display_name,
             'app_roles': json.dumps([
                 {
                     "allowedMemberTypes": [
@@ -171,70 +183,74 @@ class ApplicationSetScenarioTest(ScenarioTest):
                 }
             ])
         })
-        app_id = None
-        # create app through general option
-        self.cmd('ad app create --display-name {name} --homepage {app} --identifier-uris {app}',
-                 checks=self.check('identifierUris[0]', '{app}'))
 
-        # set app password
-        result = self.cmd('ad app credential reset --id {app} --append --password "test" --years 2').get_output_in_json()
+        # create app through general option
+        result = self.cmd('ad app create --display-name {display_name} --homepage {homepage} '
+                          '--identifier-uris {identifier_uri}',
+                          checks=[
+                              self.check('identifierUris[0]', '{identifier_uri}'),
+                              self.check('web.homePageUrl', '{homepage}')
+                          ]).get_output_in_json()
         app_id = result['appId']
-        self.assertTrue(app_id)
+        # set app password
+        result = self.cmd('ad app credential reset --id {identifier_uri} --append --years 2').get_output_in_json()
+        assert app_id == result['appId']
+
         self.kwargs['app_id'] = app_id
 
         try:
             # show by identifierUri
-            self.cmd('ad app show --id {app}', checks=self.check('identifierUris[0]', '{app}'))
+            self.cmd('ad app show --id {identifier_uri}', checks=self.check('identifierUris[0]', '{identifier_uri}'))
             # show by appId
             self.cmd('ad app show --id {app_id}', checks=self.check('appId', '{app_id}'))
 
-            self.cmd('ad app list --display-name {name}', checks=[
-                self.check('[0].identifierUris[0]', '{app}'),
+            self.cmd('ad app list --display-name {display_name}', checks=[
+                self.check('[0].identifierUris[0]', '{identifier_uri}'),
                 self.check('length([*])', 1)
             ])
 
             # update app
-            self.kwargs['reply_uri'] = "http://azureclitest-replyuri"
-            self.kwargs['reply_uri2'] = "http://azureclitest-replyuri2"
-            self.cmd('ad app update --id {app} --reply-urls {reply_uri}')
-            self.cmd('ad app show --id {app}',
-                     checks=self.check('replyUrls[0]', '{reply_uri}'))
+            self.kwargs['redirect_uri'] = "https://azureclitest-redirect-uri"
+            self.kwargs['reply_uri2'] = "https://azureclitest-redirect-uri2"
+            self.cmd('ad app update --id {app_id} --web-redirect-uris {redirect_uri}')
+            self.cmd('ad app show --id {app_id}',
+                     checks=self.check('web.redirectUris[0]', '{redirect_uri}'))
 
             # add and remove replyUrl
-            self.cmd('ad app update --id {app} --add replyUrls {reply_uri2}')
-            self.cmd('ad app show --id {app}', checks=self.check('length(replyUrls)', 2))
-            self.cmd('ad app update --id {app} --remove replyUrls 1')
-            self.cmd('ad app show --id {app}', checks=[
-                self.check('length(replyUrls)', 1),
-                self.check('replyUrls[0]', '{reply_uri2}')
-            ])
+            # self.cmd('ad app update --id {app} --add replyUrls {reply_uri2}')
+            # self.cmd('ad app show --id {app}', checks=self.check('length(replyUrls)', 2))
+            # self.cmd('ad app update --id {app} --remove replyUrls 1')
+            # self.cmd('ad app show --id {app}', checks=[
+            #     self.check('length(replyUrls)', 1),
+            #     self.check('replyUrls[0]', '{reply_uri2}')
+            # ])
 
             # update displayName
-            name2 = self.create_random_name(prefix='cli-graph', length=14)
+            name2 = self.create_random_name(prefix='cli-test-graph-app-2', length=24)
             self.kwargs['name2'] = name2
-            self.cmd('ad app update --id {app} --display-name {name2}')
-            self.cmd('ad app show --id {app}', checks=self.check('displayName', '{name2}'))
+            self.cmd('ad app update --id {app_id} --display-name {name2}')
+            self.cmd('ad app show --id {app_id}', checks=self.check('displayName', '{name2}'))
 
             # update homepage
             self.kwargs['homepage2'] = 'http://' + name2
-            self.cmd('ad app update --id {app} --homepage {homepage2}')
-            self.cmd('ad app show --id {app}', checks=self.check('homepage', '{homepage2}'))
+            self.cmd('ad app update --id {app_id} --homepage {homepage2}')
+            self.cmd('ad app show --id {app_id}', checks=self.check('web.homePageUrl', '{homepage2}'))
 
             # invoke generic update
-            self.cmd('ad app update --id {app} --set oauth2AllowUrlPathMatching=true')
-            self.cmd('ad app show --id {app}',
-                     checks=self.check('oauth2AllowUrlPathMatching', True))
+            # self.cmd('ad app update --id {app} --set oauth2AllowUrlPathMatching=true')
+            # self.cmd('ad app show --id {app}',
+            #          checks=self.check('oauth2AllowUrlPathMatching', True))
 
             # update app_roles
-            self.cmd("ad app update --id {app} --app-roles '{app_roles}'")
-            self.cmd('ad app show --id {app}',
-                     checks=self.check('length(appRoles)', 1))
+            # self.cmd("ad app update --id {app} --app-roles '{app_roles}'")
+            # self.cmd('ad app show --id {app}',
+            #          checks=self.check('length(appRoles)', 1))
 
             # delete app
-            self.cmd('ad app delete --id {app}')
+            self.cmd('ad app delete --id {app_id}')
             app_id = None
-            self.cmd('ad app list --identifier-uri {app}',
-                     checks=self.is_empty())
+            self.cmd('ad app list --identifier-uri {identifier_uri}', checks=self.is_empty())
+            self.cmd('ad app list --app-id {app_id}', checks=self.is_empty())
         finally:
             if app_id:
                 self.cmd("ad app delete --id " + app_id)

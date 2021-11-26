@@ -35,7 +35,10 @@ def load_arguments(self, _):
         c.argument('homepage', help='the url where users can sign in and use your app.')
         c.argument('identifier', options_list=['--id'], help='identifier uri, application id, or object id')
         c.argument('identifier_uris', nargs='+', help='space-separated unique URIs that Azure AD can use for this app.')
-        c.argument('reply_urls', nargs='+', help='space-separated URIs to which Azure AD will redirect in response to an OAuth 2.0 request. The value does not need to be a physical endpoint, but must be a valid URI.')
+        c.argument('web_redirect_uris', nargs='+',
+                   help='Space-separated values. '
+                        'Specifies the URLs where user tokens are sent for sign-in, or the redirect URIs '
+                        'where OAuth 2.0 authorization codes and access tokens are sent.')
         c.argument('start_date', help="Date or datetime at which credentials become valid(e.g. '2017-01-01T01:00:00+00:00' or '2017-01-01'). Default value is current time")
         c.argument('end_date', help="Date or datetime after which credentials expire(e.g. '2017-12-31T11:59:59+00:00' or '2017-12-31'). Default value is one year after current time")
         c.argument('available_to_other_tenants', help='the application can be used from any Azure AD tenants', arg_type=get_three_state_flag())

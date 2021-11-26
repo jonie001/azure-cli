@@ -3,6 +3,14 @@
 # Licensed under the MIT License. See License.txt in the project root for license information.
 # --------------------------------------------------------------------------------------------
 
+"""
+`az ad` module has been migrated to use Microsoft Graph API: https://docs.microsoft.com/en-us/graph/api/overview
+
+See:
+Property differences between Azure AD Graph and Microsoft Graph
+https://docs.microsoft.com/en-us/graph/migrate-azure-ad-graph-property-differences
+"""
+
 import base64
 import datetime
 import itertools
@@ -793,7 +801,8 @@ def _resolve_group(client, identifier):
 
 
 def create_application(cmd, client, display_name, homepage=None, identifier_uris=None,  # pylint: disable=too-many-locals
-                       available_to_other_tenants=False, password=None, reply_urls=None,
+                       available_to_other_tenants=False, password=None,
+                       web_redirect_uris=None, public_client_redirect_uris=None,
                        key_value=None, key_type=None, key_usage=None, start_date=None, end_date=None,
                        oauth2_allow_implicit_flow=None, required_resource_accesses=None, native_app=None,
                        credential_description=None, app_roles=None, optional_claims=None):
@@ -820,14 +829,19 @@ def create_application(cmd, client, display_name, homepage=None, identifier_uris
         if len(existing_apps) == 1:
             logger.warning("Found an existing application instance: (id) %s. We will patch it.",
                            existing_apps[0]['id'])
-            body = update_application(existing_apps[0], display_name=display_name, homepage=homepage,
-                                      identifier_uris=identifier_uris, password=password, reply_urls=reply_urls,
-                                      key_value=key_value, key_type=key_type, key_usage=key_usage,
-                                      start_date=start_date, end_date=end_date,
-                                      available_to_other_tenants=available_to_other_tenants,
-                                      oauth2_allow_implicit_flow=oauth2_allow_implicit_flow,
-                                      required_resource_accesses=required_resource_accesses,
-                                      credential_description=credential_description, app_roles=app_roles)
+            body = update_application(
+                existing_apps[0], display_name=display_name, homepage=homepage,
+                identifier_uris=identifier_uris, password=password,
+                web_redirect_uris=web_redirect_uris, public_client_redirect_uris=public_client_redirect_uris,
+                key_value=key_value, key_type=key_type, key_usage=key_usage,
+                start_date=start_date, end_date=end_date,
+                available_to_other_tenants=available_to_other_tenants,
+                oauth2_allow_implicit_flow=oauth2_allow_implicit_flow,
+                # JSON properties
+                app_roles=app_roles,
+                optional_claims=optional_claims,
+                required_resource_accesses=required_resource_accesses,
+                credential_description=credential_description)
             patch_application(cmd, existing_apps[0]['id'], body)
             return show_application(graph_client, existing_apps[0]['appId'])
     if not identifier_uris:
@@ -838,35 +852,33 @@ def create_application(cmd, client, display_name, homepage=None, identifier_uris
     else:
         key_credentials = _build_key_credentials(
             key_value, key_type, key_usage, start_date, end_date, credential_description)
-
-    if required_resource_accesses:
-        required_accesses = _build_application_accesses(required_resource_accesses)
-
-    if app_roles:
-        app_roles = _build_app_roles(app_roles)
-    if optional_claims:
-        optional_claims = _build_optional_claims(optional_claims)
-
-    app_create_param = ApplicationCreateParameters(available_to_other_tenants=available_to_other_tenants,
-                                                   display_name=display_name,
-                                                   identifier_uris=identifier_uris,
-                                                   homepage=homepage,
-                                                   reply_urls=reply_urls,
-                                                   key_credentials=key_credentials,
-                                                   password_credentials=password_creds,
-                                                   oauth2_allow_implicit_flow=oauth2_allow_implicit_flow,
-                                                   required_resource_access=required_accesses,
-                                                   app_roles=app_roles,
-                                                   optional_claims=optional_claims)
+    # app_create_param = ApplicationCreateParameters(available_to_other_tenants=available_to_other_tenants,
+    #                                                display_name=display_name,
+    #                                                identifier_uris=identifier_uris,
+    #                                                homepage=homepage,
+    #                                                reply_urls=reply_urls,
+    #                                                key_credentials=key_credentials,
+    #                                                password_credentials=password_creds,
+    #                                                oauth2_allow_implicit_flow=oauth2_allow_implicit_flow,
+    #                                                required_resource_access=required_accesses,
+    #                                                app_roles=app_roles,
+    #                                                optional_claims=optional_claims)
     body = {
         "displayName": display_name,
         "identifierUris": identifier_uris,
         "web": {
-            "redirectUris": reply_urls or [],
+            "redirectUris": web_redirect_uris or [],
             "homePageUrl": homepage,
+        },
+        "publicClient": {
+            "redirectUris": public_client_redirect_uris or [],
         },
         "keyCredentials": key_credentials
     }
+
+    _set_application_json_properties(app_roles=app_roles, optional_claims=optional_claims,
+                                     required_resource_accesses=required_resource_accesses)
+
     try:
         result = graph_client.application_create(body)
     except GraphErrorException as ex:
@@ -1070,17 +1082,18 @@ def grant_application(cmd, identifier, api, consent_type=None, principal_id=None
 
 
 def update_application(instance, display_name=None, homepage=None,  # pylint: disable=unused-argument
-                       identifier_uris=None, password=None, reply_urls=None, key_value=None,
-                       key_type=None, key_usage=None, start_date=None, end_date=None, available_to_other_tenants=None,
+                       identifier_uris=None, password=None, web_redirect_uris=None, public_client_redirect_uris=None,
+                       key_value=None, key_type=None, key_usage=None, start_date=None, end_date=None,
+                       available_to_other_tenants=None,
                        oauth2_allow_implicit_flow=None, required_resource_accesses=None,
                        credential_description=None, app_roles=None, optional_claims=None):
     # propagate the values
-    app_patch_param = {}
+    app_patch_body = {}
     properties = [attr for attr in dir(instance)
                   if not callable(getattr(instance, attr)) and
-                  not attr.startswith("_") and attr != 'additional_properties' and hasattr(app_patch_param, attr)]
+                  not attr.startswith("_") and attr != 'additional_properties' and hasattr(app_patch_body, attr)]
     for p in properties:
-        setattr(app_patch_param, p, getattr(instance, p))
+        setattr(app_patch_body, p, getattr(instance, p))
 
     # handle credentials. Note, we will not put existing ones on the wire to avoid roundtrip problems caused
     # by time precision difference between SDK and Graph Services
@@ -1088,33 +1101,29 @@ def update_application(instance, display_name=None, homepage=None,  # pylint: di
     if any([password, key_value]):
         password_creds, key_creds = _build_key_credentials(password, key_value, key_type, key_usage, start_date,
                                                            end_date, credential_description)
-    # app_patch_param.key_credentials = key_creds
-    # app_patch_param.password_credentials = password_creds
+    # app_patch_body.key_credentials = key_creds
+    # app_patch_body.password_credentials = password_creds
 
-    if required_resource_accesses:
-        app_patch_param.required_resource_access = _build_application_accesses(required_resource_accesses)
-
-    if app_roles:
-        app_patch_param.app_roles = _build_app_roles(app_roles)
-
-    if optional_claims:
-        app_patch_param.optional_claims = _build_optional_claims(optional_claims)
+    _set_application_json_properties(app_patch_body, app_roles=app_roles, optional_claims=optional_claims,
+                                     required_resource_accesses=required_resource_accesses)
 
     # if available_to_other_tenants is not None:
-    #     app_patch_param.available_to_other_tenants = available_to_other_tenants
+    #     app_patch_body.available_to_other_tenants = available_to_other_tenants
     # if oauth2_allow_implicit_flow is not None:
-    #     app_patch_param.oauth2_allow_implicit_flow = oauth2_allow_implicit_flow
+    #     app_patch_body.oauth2_allow_implicit_flow = oauth2_allow_implicit_flow
     if identifier_uris is not None:
-        app_patch_param['identifierUris'] = identifier_uris
+        app_patch_body['identifierUris'] = identifier_uris
     if display_name is not None:
-        app_patch_param['displayName'] = display_name
+        app_patch_body['displayName'] = display_name
 
-    if reply_urls is not None:
-        app_patch_param.setdefault('web', {})['redirectUris'] = reply_urls
+    if web_redirect_uris is not None:
+        app_patch_body.setdefault('web', {})['redirectUris'] = web_redirect_uris
+    if public_client_redirect_uris is not None:
+        app_patch_body.setdefault('publicClient', {})['redirectUris'] = public_client_redirect_uris
     if homepage is not None:
-        app_patch_param.setdefault('web', {})['homePageUrl'] = homepage
+        app_patch_body.setdefault('web', {})['homePageUrl'] = homepage
 
-    return app_patch_param
+    return app_patch_body
 
 
 def patch_application(cmd, identifier, parameters):
@@ -1129,56 +1138,33 @@ def patch_service_principal(cmd, identifier, parameters):
     return graph_client.service_principals.update(object_id, parameters)
 
 
-def _build_application_accesses(required_resource_accesses):
-    if not required_resource_accesses:
-        return None
-    required_accesses = []
+def _build_required_resource_accesses(required_resource_accesses):
+    # https://docs.microsoft.com/en-us/graph/api/resources/requiredresourceaccess
     if isinstance(required_resource_accesses, dict):
         logger.info('Getting "requiredResourceAccess" from a full manifest')
         required_resource_accesses = required_resource_accesses.get('requiredResourceAccess', [])
-    for x in required_resource_accesses:
-        accesses = [ResourceAccess(id=y['id'], type=y['type']) for y in x['resourceAccess']]
-        required_accesses.append(RequiredResourceAccess(resource_app_id=x['resourceAppId'],
-                                                        resource_access=accesses))
-    return required_accesses
+    return required_resource_accesses
 
 
 def _build_app_roles(app_roles):
-    if not app_roles:
-        return None
-    result = []
+    # https://docs.microsoft.com/en-us/graph/api/resources/approle
     if isinstance(app_roles, dict):
         logger.info('Getting "appRoles" from a full manifest')
         app_roles = app_roles.get('appRoles', [])
     for x in app_roles:
-        role = AppRole(id=x.get('id', None) or _gen_guid(), allowed_member_types=x.get('allowedMemberTypes', None),
-                       description=x.get('description', None), display_name=x.get('displayName', None),
-                       is_enabled=x.get('isEnabled', None), value=x.get('value', None))
-        result.append(role)
-    return result
+        # Make sure 'id' is specified as a GUID if not provided.
+        if not x.get('id'):
+            x['id'] = str(_gen_guid())
+    return app_roles
 
 
 def _build_optional_claims(optional_claims):
-    if not optional_claims:
-        return None
-    available_keys = {
-        'idToken': 'id_token',
-        'accessToken': 'access_token'
-    }
-    result = OptionalClaims()
-    for key, object_key in available_keys.items():
-        if optional_claims.get(key, []):
-            tokens = []
-            for token in optional_claims.get(key):
-                tokens.append(OptionalClaim(
-                    name=token.get('name', None),
-                    source=token.get('source', None),
-                    essential=token.get('essential', None),
-                    additional_properties=token.get('additionalProperties', None)
-                ))
-            if tokens:
-                setattr(result, object_key, tokens)
-    return result
+    # https://docs.microsoft.com/en-us/graph/api/resources/optionalclaim
+    # https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-optional-claims#configuring-optional-claims
+    if 'optionalClaims' in optional_claims:
+        logger.info('Getting "optionalClaims" from a full manifest')
+        optional_claims = optional_claims.get('optionalClaims', [])
+    return optional_claims
 
 
 def show_application(client, identifier):
@@ -1785,9 +1771,11 @@ def reset_service_principal_credential(cmd, name, create_cert=False, cert=None, 
             }
             client.application_password_remove(app['id'], body)
 
+    password = None
     # Be default, add password
     if not cert and not create_cert:
-        _application_add_password(client, app, app_start_date, app_end_date, display_name)
+        add_password_result = _application_add_password(client, app, app_start_date, app_end_date, display_name)
+        password = add_password_result['secretText']
 
     else:
         password, public_cert_string, cert_file, cert_start_date, cert_end_date = \
@@ -1814,16 +1802,15 @@ def reset_service_principal_credential(cmd, name, create_cert=False, cert=None, 
     #
     # client.applications.patch(app.object_id, app_patch_param)
     #
-    # result = {
-    #     'appId': app.app_id,
-    #     'password': password,
-    #     'name': name,
-    #     'tenant': client.config.tenant_id
-    # }
-    # if cert_file:
-    #     result['fileWithCertAndPrivateKey'] = cert_file
-    #
-    # logger.warning(CREDENTIAL_WARNING)
+    result = {
+        'appId': app['appId'],
+        'password': password,
+        'tenant': client.tenant
+    }
+    if cert_file:
+        result['fileWithCertAndPrivateKey'] = cert_file
+
+    logger.warning(CREDENTIAL_WARNING)
     return result
 
 
@@ -1967,3 +1954,12 @@ def _application_add_password(client, app, start_datetime, end_datetime, display
     }
     result = client.application_password_add(app['id'], body)
     return result
+
+
+def _set_application_json_properties(body, app_roles=None, optional_claims=None, required_resource_accesses=None):
+    if app_roles:
+        body['appRoles'] = _build_app_roles(app_roles)
+    if optional_claims:
+        body['optionalClaims'] = _build_optional_claims(optional_claims)
+    if required_resource_accesses:
+        body['requiredResourceAccess'] = _build_required_resource_accesses(required_resource_accesses)
