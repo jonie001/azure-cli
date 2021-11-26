@@ -800,19 +800,18 @@ def _resolve_group(client, identifier):
     return identifier
 
 
-def create_application(cmd, client, display_name, web_home_page_url=None, identifier_uris=None,  # pylint: disable=too-many-locals
-                       sign_in_audience=False, is_fallback_public_client=None,
-                       web_redirect_uris=None, public_client_redirect_uris=None,
-                       key_value=None, key_type=None, key_usage=None, start_date=None, end_date=None, credential_description=None,
+def create_application(cmd, client, display_name, identifier_uris=None,
+                       is_fallback_public_client=None, sign_in_audience=None,
+                       # keyCredentials
+                       key_value=None, key_type=None, key_usage=None, start_date=None, end_date=None,
+                       credential_description=None,
+                       # web
+                       web_home_page_url=None, web_redirect_uris=None,
                        implicit_grant_id_token_issuance=None, implicit_grant_access_token_issuance=None,
-                       app_roles=None, optional_claims=None, required_resource_accesses=None, ):
-    # body = {
-    #     "displayName": display_name
-    # }
-    # result = client.application_create(body=body)
-    # return result
-    #
-    # client = _graph_client_factory(cmd.cli_ctx)
+                       # publicClient
+                       public_client_redirect_uris=None,
+                       # JSON properties
+                       app_roles=None, optional_claims=None, required_resource_accesses=None):
 
     graph_client = _graph_client_factory(cmd.cli_ctx)
     key_credentials, password_creds, required_accesses = None, None, None
@@ -866,12 +865,13 @@ def create_application(cmd, client, display_name, web_home_page_url=None, identi
         # keyCredentials
         key_credentials=key_credentials,
         # web
-        web_home_page_url=None, web_redirect_uris=None,
-        implicit_grant_id_token_issuance=None, implicit_grant_access_token_issuance=None,
+        web_home_page_url=web_home_page_url, web_redirect_uris=web_redirect_uris,
+        implicit_grant_id_token_issuance=implicit_grant_id_token_issuance,
+        implicit_grant_access_token_issuance=implicit_grant_access_token_issuance,
         # publicClient
-        public_client_redirect_uris=None,
+        public_client_redirect_uris=public_client_redirect_uris,
         # JSON properties
-        app_roles=None, optional_claims=None, required_resource_accesses=None
+        app_roles=app_roles, optional_claims=optional_claims, required_resource_accesses=required_resource_accesses
     )
 
     try:
@@ -1097,12 +1097,13 @@ def update_application(instance, display_name=None, identifier_uris=None,
         # keyCredentials
         key_credentials=key_credentials,
         # web
-        web_home_page_url=None, web_redirect_uris=None,
-        implicit_grant_id_token_issuance=None, implicit_grant_access_token_issuance=None,
+        web_home_page_url=web_home_page_url, web_redirect_uris=web_redirect_uris,
+        implicit_grant_id_token_issuance=implicit_grant_id_token_issuance,
+        implicit_grant_access_token_issuance=implicit_grant_access_token_issuance,
         # publicClient
-        public_client_redirect_uris=None,
+        public_client_redirect_uris=public_client_redirect_uris,
         # JSON properties
-        app_roles=None, optional_claims=None, required_resource_accesses=None
+        app_roles=app_roles, optional_claims=optional_claims, required_resource_accesses=required_resource_accesses
     )
 
     return body
@@ -1439,7 +1440,6 @@ def create_service_principal_for_rbac(
     aad_application = create_application(cmd,
                                          graph_client,
                                          app_display_name,
-                                         available_to_other_tenants=False,
                                          key_value=public_cert_string,
                                          start_date=app_start_date,
                                          end_date=app_end_date)

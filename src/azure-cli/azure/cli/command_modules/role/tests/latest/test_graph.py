@@ -155,17 +155,13 @@ lBMWCjI8gO6W8YQMu7AH""".replace('\n', '')
 class ApplicationSetScenarioTest(ScenarioTest):
 
     def test_application_scenario(self):
-        display_name = self.create_random_name(prefix='cli-test-graph-app', length=24)
+        display_name = self.create_random_name(prefix='azure-cli-test-graph-app', length=30)
 
         # identifierUris must be on verified domain
         # https://docs.microsoft.com/en-us/azure/active-directory/develop/security-best-practices-for-app-registration#appid-uri-configuration
 
-        # Example: xxx_microsoft.com#EXT#@AzureSDKTeam.onmicrosoft.com
-        user_principal_mame = self.cmd('ad signed-in-user show --query userPrincipalName').get_output_in_json()
-
-        # Example: AzureSDKTeam.onmicrosoft.com
-        domain = user_principal_mame.split('@')[1]
-        identifier_uri = f'https://{domain}/{display_name}'
+        tenant_id = self.cmd('account show --query tenantId').get_output_in_json()
+        identifier_uri = f'api://{tenant_id}/{display_name}'
 
         self.kwargs.update({
             'identifier_uri': identifier_uri,
@@ -185,7 +181,7 @@ class ApplicationSetScenarioTest(ScenarioTest):
         })
 
         # create app through general option
-        result = self.cmd('ad app create --display-name {display_name} --homepage {homepage} '
+        result = self.cmd('ad app create --display-name {display_name} --web-home-page-url {homepage} '
                           '--identifier-uris {identifier_uri}',
                           checks=[
                               self.check('identifierUris[0]', '{identifier_uri}'),
@@ -226,14 +222,14 @@ class ApplicationSetScenarioTest(ScenarioTest):
             # ])
 
             # update displayName
-            name2 = self.create_random_name(prefix='cli-test-graph-app-2', length=24)
+            name2 = self.create_random_name(prefix='azure-cli-test-graph-app-2', length=30)
             self.kwargs['name2'] = name2
             self.cmd('ad app update --id {app_id} --display-name {name2}')
             self.cmd('ad app show --id {app_id}', checks=self.check('displayName', '{name2}'))
 
             # update homepage
             self.kwargs['homepage2'] = 'http://' + name2
-            self.cmd('ad app update --id {app_id} --homepage {homepage2}')
+            self.cmd('ad app update --id {app_id} --web-home-page-url {homepage2}')
             self.cmd('ad app show --id {app_id}', checks=self.check('web.homePageUrl', '{homepage2}'))
 
             # invoke generic update
