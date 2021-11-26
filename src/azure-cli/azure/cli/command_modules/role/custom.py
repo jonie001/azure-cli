@@ -315,7 +315,7 @@ def _get_assignment_events(cli_ctx, start_time=None, end_time=None):
     from azure.mgmt.monitor import MonitorManagementClient
     from azure.cli.core.commands.client_factory import get_mgmt_service_client
     client = get_mgmt_service_client(cli_ctx, MonitorManagementClient)
-    DATE_TIME_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
+
     if end_time:
         try:
             end_time = datetime.datetime.strptime(end_time, DATE_TIME_FORMAT)
@@ -334,8 +334,8 @@ def _get_assignment_events(cli_ctx, start_time=None, end_time=None):
     else:
         start_time = end_time - datetime.timedelta(hours=1)
 
-    time_filter = 'eventTimestamp ge {} and eventTimestamp le {}'.format(start_time.strftime('%Y-%m-%dT%H:%M:%SZ'),
-                                                                         end_time.strftime('%Y-%m-%dT%H:%M:%SZ'))
+    time_filter = 'eventTimestamp ge {} and eventTimestamp le {}'.format(_datetime_to_utc(start_time),
+                                                                         _datetime_to_utc(end_time))
 
     # set time range filter
     odata_filters = 'resourceProvider eq Microsoft.Authorization and {}'.format(time_filter)
@@ -1205,10 +1205,10 @@ def _build_key_credentials(key_value=None, key_type=None, key_usage=None,
         "@odata.type": "#microsoft.graph.keyCredential",
         "customKeyIdentifier": custom_key_id,
         "displayName": "String",
-        "endDateTime": end_date.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        "endDateTime": _datetime_to_utc(end_date),
         "key": key_value,
         "keyId": str(_gen_guid()),
-        "startDateTime": start_date.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        "startDateTime": _datetime_to_utc(start_date),
         "type": key_type,
         "usage": key_usage
     }
@@ -1931,8 +1931,8 @@ def _application_add_password(client, app, start_datetime, end_datetime, display
     """Let graph service generate a random password."""
     body = {
         "passwordCredential": {
-            "startDateTime": start_datetime.strftime('%Y-%m-%dT%H:%M:%SZ'),
-            "endDateTime": end_datetime.strftime('%Y-%m-%dT%H:%M:%SZ'),
+            "startDateTime": _datetime_to_utc(start_datetime),
+            "endDateTime": _datetime_to_utc(end_datetime),
             "displayName": display_name
         }
     }
@@ -1984,3 +1984,7 @@ def _set_application_properties(
         body['optionalClaims'] = _build_optional_claims(optional_claims)
     if required_resource_accesses:
         body['requiredResourceAccess'] = _build_required_resource_accesses(required_resource_accesses)
+
+
+def _datetime_to_utc(dt):
+    return dt.strftime('%Y-%m-%dT%H:%M:%SZ')
