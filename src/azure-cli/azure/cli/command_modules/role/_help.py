@@ -20,6 +20,7 @@ short-summary: Manage applications with AAD Graph.
 helps['ad app create'] = """
 type: command
 short-summary: Create a web application, web API or native application
+long-summary: For more detailed documentation, see https://docs.microsoft.com/graph/api/resources/application
 examples:
   - name: Create a native application with delegated permission of "access the AAD directory as the signed-in user"
     text: |

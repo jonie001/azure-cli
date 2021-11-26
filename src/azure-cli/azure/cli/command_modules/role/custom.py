@@ -800,12 +800,12 @@ def _resolve_group(client, identifier):
     return identifier
 
 
-def create_application(cmd, client, display_name, homepage=None, identifier_uris=None,  # pylint: disable=too-many-locals
-                       available_to_other_tenants=False, password=None,
+def create_application(cmd, client, display_name, web_home_page_url=None, identifier_uris=None,  # pylint: disable=too-many-locals
+                       sign_in_audience=False, is_fallback_public_client=None,
                        web_redirect_uris=None, public_client_redirect_uris=None,
-                       key_value=None, key_type=None, key_usage=None, start_date=None, end_date=None,
-                       oauth2_allow_implicit_flow=None, required_resource_accesses=None, native_app=None,
-                       credential_description=None, app_roles=None, optional_claims=None):
+                       key_value=None, key_type=None, key_usage=None, start_date=None, end_date=None, credential_description=None,
+                       implicit_grant_id_token_issuance=None, implicit_grant_access_token_issuance=None,
+                       app_roles=None, optional_claims=None, required_resource_accesses=None, ):
     # body = {
     #     "displayName": display_name
     # }
@@ -821,8 +821,6 @@ def create_application(cmd, client, display_name, homepage=None, identifier_uris
         if identifier_uris:
             existing_apps = [x for x in existing_apps if set(identifier_uris).issubset(set(x['identifierUris']))]
         existing_apps = [x for x in existing_apps if x['displayName'] == display_name]
-        if native_app:
-            existing_apps = [x for x in existing_apps if x.public_client]
         if len(existing_apps) > 1:
             raise CLIError("More than one application have the same display name '{}': (id) {}, please remove "
                            'them first.'.format(display_name, ', '.join([x['id'] for x in existing_apps])))
@@ -830,54 +828,51 @@ def create_application(cmd, client, display_name, homepage=None, identifier_uris
             logger.warning("Found an existing application instance: (id) %s. We will patch it.",
                            existing_apps[0]['id'])
             body = update_application(
-                existing_apps[0], display_name=display_name, homepage=homepage,
-                identifier_uris=identifier_uris, password=password,
-                web_redirect_uris=web_redirect_uris, public_client_redirect_uris=public_client_redirect_uris,
+                existing_apps[0], display_name=display_name, identifier_uris=identifier_uris,
+                is_fallback_public_client=is_fallback_public_client, sign_in_audience=sign_in_audience,
+                # keyCredentials
                 key_value=key_value, key_type=key_type, key_usage=key_usage,
                 start_date=start_date, end_date=end_date,
-                available_to_other_tenants=available_to_other_tenants,
-                oauth2_allow_implicit_flow=oauth2_allow_implicit_flow,
+                credential_description=credential_description,
+                # web
+                web_home_page_url=web_home_page_url, web_redirect_uris=web_redirect_uris,
+                implicit_grant_id_token_issuance=implicit_grant_id_token_issuance,
+                implicit_grant_access_token_issuance=implicit_grant_access_token_issuance,
+                # publicClient
+                public_client_redirect_uris=public_client_redirect_uris,
                 # JSON properties
                 app_roles=app_roles,
                 optional_claims=optional_claims,
-                required_resource_accesses=required_resource_accesses,
-                credential_description=credential_description)
+                required_resource_accesses=required_resource_accesses)
             patch_application(cmd, existing_apps[0]['id'], body)
-            return show_application(graph_client, existing_apps[0]['appId'])
+
+            # no need to resolve identifierUris or appId. Just use id.
+            return client.application_get(existing_apps[0]['id'])
+
     if not identifier_uris:
         identifier_uris = []
-    if native_app:
-        if identifier_uris:
-            raise CLIError("'--identifier-uris' is not required for creating a native application")
-    else:
-        key_credentials = _build_key_credentials(
-            key_value, key_type, key_usage, start_date, end_date, credential_description)
-    # app_create_param = ApplicationCreateParameters(available_to_other_tenants=available_to_other_tenants,
-    #                                                display_name=display_name,
-    #                                                identifier_uris=identifier_uris,
-    #                                                homepage=homepage,
-    #                                                reply_urls=reply_urls,
-    #                                                key_credentials=key_credentials,
-    #                                                password_credentials=password_creds,
-    #                                                oauth2_allow_implicit_flow=oauth2_allow_implicit_flow,
-    #                                                required_resource_access=required_accesses,
-    #                                                app_roles=app_roles,
-    #                                                optional_claims=optional_claims)
+
+    key_credentials = _build_key_credentials(
+        key_value, key_type, key_usage, start_date, end_date, credential_description)
+
     body = {
         "displayName": display_name,
         "identifierUris": identifier_uris,
-        "web": {
-            "redirectUris": web_redirect_uris or [],
-            "homePageUrl": homepage,
-        },
-        "publicClient": {
-            "redirectUris": public_client_redirect_uris or [],
-        },
-        "keyCredentials": key_credentials
     }
 
-    _set_application_json_properties(app_roles=app_roles, optional_claims=optional_claims,
-                                     required_resource_accesses=required_resource_accesses)
+    _set_application_properties(
+        body,
+        is_fallback_public_client=is_fallback_public_client, sign_in_audience=sign_in_audience,
+        # keyCredentials
+        key_credentials=key_credentials,
+        # web
+        web_home_page_url=None, web_redirect_uris=None,
+        implicit_grant_id_token_issuance=None, implicit_grant_access_token_issuance=None,
+        # publicClient
+        public_client_redirect_uris=None,
+        # JSON properties
+        app_roles=None, optional_claims=None, required_resource_accesses=None
+    )
 
     try:
         result = graph_client.application_create(body)
@@ -887,15 +882,6 @@ def create_application(cmd, client, display_name, homepage=None, identifier_uris
             raise CLIError("Directory permission is needed for the current user to register the application. "
                            "For how to configure, please refer '{}'. Original error: {}".format(link, ex))
         raise
-
-    if native_app:
-        # AAD graph doesn't have the API to create a native app, aka public client, the recommended hack is
-        # to create a web app first, then convert to a native one
-        # pylint: disable=protected-access
-        app_patch_param = ApplicationUpdateParameters(public_client=True)
-        graph_client.applications.patch(result.object_id, app_patch_param)
-        result = graph_client.applications.get(result.object_id)
-
     return result
 
 
@@ -1081,49 +1067,45 @@ def grant_application(cmd, identifier, api, consent_type=None, principal_id=None
     return graph_client.oauth2_permission_grant.create(payload)  # pylint: disable=no-member
 
 
-def update_application(instance, display_name=None, homepage=None,  # pylint: disable=unused-argument
-                       identifier_uris=None, password=None, web_redirect_uris=None, public_client_redirect_uris=None,
+def update_application(instance, display_name=None, identifier_uris=None,
+                       is_fallback_public_client=None, sign_in_audience=None,
+                       # keyCredentials
                        key_value=None, key_type=None, key_usage=None, start_date=None, end_date=None,
-                       available_to_other_tenants=None,
-                       oauth2_allow_implicit_flow=None, required_resource_accesses=None,
-                       credential_description=None, app_roles=None, optional_claims=None):
-    # propagate the values
-    app_patch_body = {}
-    properties = [attr for attr in dir(instance)
-                  if not callable(getattr(instance, attr)) and
-                  not attr.startswith("_") and attr != 'additional_properties' and hasattr(app_patch_body, attr)]
-    for p in properties:
-        setattr(app_patch_body, p, getattr(instance, p))
+                       credential_description=None,
+                       # web
+                       web_home_page_url=None, web_redirect_uris=None,
+                       implicit_grant_id_token_issuance=None, implicit_grant_access_token_issuance=None,
+                       # publicClient
+                       public_client_redirect_uris=None,
+                       # JSON properties
+                       app_roles=None, optional_claims=None, required_resource_accesses=None):
+    body = {}
 
-    # handle credentials. Note, we will not put existing ones on the wire to avoid roundtrip problems caused
-    # by time precision difference between SDK and Graph Services
-    password_creds, key_creds = None, None
-    if any([password, key_value]):
-        password_creds, key_creds = _build_key_credentials(password, key_value, key_type, key_usage, start_date,
-                                                           end_date, credential_description)
-    # app_patch_body.key_credentials = key_creds
-    # app_patch_body.password_credentials = password_creds
+    key_credentials = None
+    if key_value:
+        key_credentials = _build_key_credentials(
+            key_value, key_type, key_usage, start_date, end_date, credential_description)
 
-    _set_application_json_properties(app_patch_body, app_roles=app_roles, optional_claims=optional_claims,
-                                     required_resource_accesses=required_resource_accesses)
-
-    # if available_to_other_tenants is not None:
-    #     app_patch_body.available_to_other_tenants = available_to_other_tenants
-    # if oauth2_allow_implicit_flow is not None:
-    #     app_patch_body.oauth2_allow_implicit_flow = oauth2_allow_implicit_flow
     if identifier_uris is not None:
-        app_patch_body['identifierUris'] = identifier_uris
+        body['identifierUris'] = identifier_uris
     if display_name is not None:
-        app_patch_body['displayName'] = display_name
+        body['displayName'] = display_name
 
-    if web_redirect_uris is not None:
-        app_patch_body.setdefault('web', {})['redirectUris'] = web_redirect_uris
-    if public_client_redirect_uris is not None:
-        app_patch_body.setdefault('publicClient', {})['redirectUris'] = public_client_redirect_uris
-    if homepage is not None:
-        app_patch_body.setdefault('web', {})['homePageUrl'] = homepage
+    _set_application_properties(
+        body,
+        is_fallback_public_client=is_fallback_public_client, sign_in_audience=sign_in_audience,
+        # keyCredentials
+        key_credentials=key_credentials,
+        # web
+        web_home_page_url=None, web_redirect_uris=None,
+        implicit_grant_id_token_issuance=None, implicit_grant_access_token_issuance=None,
+        # publicClient
+        public_client_redirect_uris=None,
+        # JSON properties
+        app_roles=None, optional_claims=None, required_resource_accesses=None
+    )
 
-    return app_patch_body
+    return body
 
 
 def patch_application(cmd, identifier, parameters):
@@ -1194,6 +1176,8 @@ def _resolve_application(client, identifier):
 
 def _build_key_credentials(key_value=None, key_type=None, key_usage=None,
                            start_date=None, end_date=None, key_description=None):
+    # TODO: display name
+    # https://docs.microsoft.com/en-us/graph/api/resources/keycredential
     if not key_value:
         # No key credential should be set
         return []
@@ -1956,7 +1940,44 @@ def _application_add_password(client, app, start_datetime, end_datetime, display
     return result
 
 
-def _set_application_json_properties(body, app_roles=None, optional_claims=None, required_resource_accesses=None):
+def _set_application_properties(
+        body, is_fallback_public_client=None, sign_in_audience=None,
+        # keyCredentials
+        key_credentials=None,
+        # web
+        web_home_page_url=None, web_redirect_uris=None,
+        implicit_grant_id_token_issuance=None, implicit_grant_access_token_issuance=None,
+        # publicClient
+        public_client_redirect_uris=None,
+        # JSON properties
+        app_roles=None, optional_claims=None, required_resource_accesses=None):
+
+    if key_credentials:
+        body['keyCredentials'] = key_credentials
+
+    if sign_in_audience is not None:
+        body['signInAudience'] = sign_in_audience
+
+    if is_fallback_public_client is not None:
+        body['isFallbackPublicClient'] = is_fallback_public_client
+
+    if implicit_grant_id_token_issuance is not None:
+        body.setdefault('web', {}).setdefault('implicitGrantSettings', {})['enableAccessTokenIssuance'] = \
+            implicit_grant_id_token_issuance
+
+    if implicit_grant_access_token_issuance is not None:
+        body.setdefault('web', {}).setdefault('implicitGrantSettings', {})['enableAccessTokenIssuance'] = \
+            implicit_grant_access_token_issuance
+
+    # list properties
+    if web_redirect_uris is not None:
+        body.setdefault('web', {})['redirectUris'] = web_redirect_uris
+    if public_client_redirect_uris is not None:
+        body.setdefault('publicClient', {})['redirectUris'] = public_client_redirect_uris
+    if web_home_page_url is not None:
+        body.setdefault('web', {})['homePageUrl'] = web_home_page_url
+
+    # JSON properties
     if app_roles:
         body['appRoles'] = _build_app_roles(app_roles)
     if optional_claims:

@@ -32,30 +32,65 @@ def load_arguments(self, _):
         c.argument('app_id', help='application id')
         c.argument('application_object_id', options_list=('--object-id',))
         c.argument('display_name', help='the display name of the application')
-        c.argument('homepage', help='the url where users can sign in and use your app.')
+
         c.argument('identifier', options_list=['--id'], help='identifier uri, application id, or object id')
-        c.argument('identifier_uris', nargs='+', help='space-separated unique URIs that Azure AD can use for this app.')
-        c.argument('web_redirect_uris', nargs='+',
+        c.argument('identifier_uris', nargs='+',
+                   help='space-separated values. '
+                        'Also known as App ID URI, this value is set when an application is used as a resource app. '
+                        'The identifierUris acts as the prefix for the scopes you\'ll reference in your API\'s code, '
+                        'and it must be globally unique. You can use the default value provided, which is in the '
+                        'form api://<application-client-id>, or specify a more readable URI like '
+                        'https://contoso.com/api.')
+
+        c.argument('is_fallback_public_client', arg_type=get_three_state_flag(),
+                   help="Specifies the fallback application type as public client, such as an installed application "
+                        "running on a mobile device. The default value is false which means the fallback application "
+                        "type is confidential client such as a web app.")
+        c.argument('sign_in_audience',
+                   arg_type=get_enum_type(['AzureADMyOrg', 'AzureADMultipleOrgs', 'AzureADandPersonalMicrosoftAccount',
+                                           'PersonalMicrosoftAccount']),
+                   help='Specifies the Microsoft accounts that are supported for the current application.')
+
+        # web
+        c.argument('web_home_page_url', arg_group='web', help='Home page or landing page of the application.')
+        c.argument('web_redirect_uris', arg_group='web', nargs='+',
                    help='Space-separated values. '
                         'Specifies the URLs where user tokens are sent for sign-in, or the redirect URIs '
                         'where OAuth 2.0 authorization codes and access tokens are sent.')
-        c.argument('start_date', help="Date or datetime at which credentials become valid(e.g. '2017-01-01T01:00:00+00:00' or '2017-01-01'). Default value is current time")
-        c.argument('end_date', help="Date or datetime after which credentials expire(e.g. '2017-12-31T11:59:59+00:00' or '2017-12-31'). Default value is one year after current time")
-        c.argument('available_to_other_tenants', help='the application can be used from any Azure AD tenants', arg_type=get_three_state_flag())
-        c.argument('key_value', help='the value for the key credentials associated with the application')
-        # TODO: Update these with **enum_choice_list(...) when SDK supports proper enums
-        c.argument('key_type', help='the type of the key credentials associated with the application', arg_type=get_enum_type(['AsymmetricX509Cert', 'Password', 'Symmetric'], default='AsymmetricX509Cert'))
-        c.argument('key_usage', help='the usage of the key credentials associated with the application.', arg_type=get_enum_type(['Sign', 'Verify'], default='Verify'))
-        c.argument('password', help="app password, aka 'client secret'", arg_type=get_three_state_flag())
-        c.argument('oauth2_allow_implicit_flow', arg_type=get_three_state_flag(), help='whether to allow implicit grant flow for OAuth2')
+        c.argument('implicit_grant_id_token_issuance', arg_group='web',
+                   arg_type=get_three_state_flag(),
+                   help='Specifies whether this web application can request an ID token using the OAuth 2.0 '
+                        'implicit flow.')
+        c.argument('implicit_grant_access_token_issuance', arg_group='web',
+                   arg_type=get_three_state_flag(),
+                   help='Specifies whether this web application can request an access token using the OAuth 2.0 '
+                        'implicit flow.')
+
+        # publicClient
+        c.argument('public_client_redirect_uris', arg_group='publicClient', nargs='+',
+                   help='Space-separated values. '
+                        'Specifies the URLs where user tokens are sent for sign-in, or the redirect URIs '
+                        'where OAuth 2.0 authorization codes and access tokens are sent.')
+
+        # keyCredentials
+        c.argument('start_date', arg_group='keyCredentials',
+                   help="Date or datetime at which credentials become valid(e.g. '2017-01-01T01:00:00+00:00' or '2017-01-01'). Default value is current time")
+        c.argument('end_date', arg_group='keyCredentials',
+                   help="Date or datetime after which credentials expire(e.g. '2017-12-31T11:59:59+00:00' or '2017-12-31'). Default value is one year after current time")
+        c.argument('key_value', arg_group='keyCredentials',
+                   help='the value for the key credentials associated with the application')
+        c.argument('key_type', arg_group='keyCredentials',
+                   help='the type of the key credentials associated with the application', arg_type=get_enum_type(['AsymmetricX509Cert', 'Password', 'Symmetric'], default='AsymmetricX509Cert'))
+        c.argument('key_usage', arg_group='keyCredentials',
+                   help='the usage of the key credentials associated with the application.', arg_type=get_enum_type(['Sign', 'Verify'], default='Verify'))
+        c.argument('credential_description', help="the description of the password")
+
         c.argument('required_resource_accesses', type=validate_file_or_dict,
                    help="resource scopes and roles the application requires access to. Should be in manifest json format. See examples below for details")
         c.argument('app_roles', type=validate_file_or_dict,
                    help="declare the roles you want to associate with your application. Should be in manifest json format. See examples below for details")
         c.argument('optional_claims', type=validate_file_or_dict,
                    help="declare the optional claims for the application. Should be in manifest json format. See examples below for details. Please reference https://docs.microsoft.com/azure/active-directory/develop/active-directory-optional-claims#optionalclaim-type for optional claim properties.")
-        c.argument('native_app', arg_type=get_three_state_flag(), help="an application which can be installed on a user's device or computer")
-        c.argument('credential_description', help="the description of the password")
 
     with self.argument_context('ad app owner list') as c:
         c.argument('identifier', options_list=['--id'], help='identifier uri, application id, or object id of the application')

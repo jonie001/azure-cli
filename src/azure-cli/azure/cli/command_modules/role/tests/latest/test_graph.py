@@ -158,7 +158,7 @@ class ApplicationSetScenarioTest(ScenarioTest):
         display_name = self.create_random_name(prefix='cli-test-graph-app', length=24)
 
         # identifierUris must be on verified domain
-        # https://docs.microsoft.com/en-us/azure/active-directory/develop/reference-breaking-changes#appid-uri-in-single-tenant-applications-will-require-use-of-default-scheme-or-verified-domains
+        # https://docs.microsoft.com/en-us/azure/active-directory/develop/security-best-practices-for-app-registration#appid-uri-configuration
 
         # Example: xxx_microsoft.com#EXT#@AzureSDKTeam.onmicrosoft.com
         user_principal_mame = self.cmd('ad signed-in-user show --query userPrincipalName').get_output_in_json()
