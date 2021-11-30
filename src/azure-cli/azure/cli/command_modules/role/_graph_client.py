@@ -115,18 +115,33 @@ class GraphClient:
         return result
 
     def service_principal_get(self, id):
-        # https://docs.microsoft.com/en-us/graph/api/application-get
+        # https://docs.microsoft.com/en-us/graph/api/serviceprincipal-get
         result = self._send("GET", "/servicePrincipals/{id}".format(id=id))
         return result
 
     def service_principal_list(self, filter=None):
-        # https://docs.microsoft.com/en-us/graph/api/application-list
+        # https://docs.microsoft.com/en-us/graph/api/serviceprincipal-list
         result = self._send("GET", "/servicePrincipals?$filter={}".format(filter))
         return result
 
     def service_principal_delete(self, id):
-        # https://docs.microsoft.com/en-us/graph/api/application-delete
+        # https://docs.microsoft.com/en-us/graph/api/serviceprincipal-delete
         result = self._send("DELETE", "/servicePrincipals/{id}".format(id=id))
+        return result
+
+    def service_principal_patch(self, id, body):
+        # https://docs.microsoft.com/en-us/graph/api/serviceprincipal-update
+        result = self._send("PATCH", "/servicePrincipals/{id}".format(id=id), body=body)
+        return result
+
+    def service_principal_password_add(self, id, body):
+        # https://docs.microsoft.com/en-us/graph/api/serviceprincipal-addpassword
+        result = self._send("POST", "/servicePrincipals/{id}/addPassword".format(id=id), body=body)
+        return result
+
+    def service_principal_password_remove(self, id, body):
+        # https://docs.microsoft.com/en-us/graph/api/serviceprincipal-removepassword
+        result = self._send("POST", "/servicePrincipals/{id}/removePassword".format(id=id), body=body)
         return result
 
     def service_principal_owner_list(self, id):

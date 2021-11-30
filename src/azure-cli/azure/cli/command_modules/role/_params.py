@@ -154,10 +154,11 @@ def load_arguments(self, _):
         c.argument('name', options_list=['--id'], help='identifier uri, application id, or object id')
         c.argument('cert', arg_group='Credential', validator=validate_cert, help='Certificate to use for credentials')
         c.argument('years', type=int, default=None, arg_group='Credential', help='Number of years for which the credentials will be valid')
-        c.argument('create_cert', action='store_true', arg_group='Credential', help='Create a self-signed certificate to use for the credential')
-        c.argument('keyvault', arg_group='Credential', help='Name or ID of a KeyVault to use for creating or retrieving certificates.')
         c.argument('append', action='store_true', help='Append the new credential instead of overwriting.')
         c.argument('display_name', help="Friendly name for the password.")
+
+        c.argument('create_cert', action='store_true', arg_group='keyCredentials', help='Create a self-signed certificate to use for the credential')
+        c.argument('keyvault', arg_group='keyCredentials', help='Name or ID of a KeyVault to use for creating or retrieving certificates.')
 
     for item in ['ad sp credential delete', 'ad sp credential list', 'ad app credential delete', 'ad app credential list']:
         with self.argument_context(item) as c:

@@ -945,6 +945,7 @@ def delete_application(client, identifier):
 
 
 def _resolve_application(client, identifier):
+    """Resolve an application and return its id."""
     result = client.application_list(filter="identifierUris/any(s:s eq '{}')".format(identifier))
     if not result:
         if is_guid(identifier):
@@ -956,6 +957,94 @@ def _resolve_application(client, identifier):
             raise error
 
     return result[0]['id'] if result else identifier
+
+
+def reset_application_credential(cmd, identifier, create_cert=False, cert=None, years=None,
+                                 end_date=None, keyvault=None, append=False, display_name=None):
+    client = _graph_client_factory(cmd.cli_ctx)
+
+    app_start_date = datetime.datetime.now(datetime.timezone.utc)
+    if years is not None and end_date is not None:
+        raise CLIError('usage error: --years | --end-date')
+    if end_date is None:
+        years = years or 1
+        app_end_date = app_start_date + relativedelta(years=years)
+    else:
+        app_end_date = dateutil.parser.parse(end_date)
+        if app_end_date.tzinfo is None:
+            app_end_date = app_end_date.replace(tzinfo=datetime.timezone.utc)
+        years = (app_end_date - app_start_date).days / 365
+
+    # look for the existing application
+    app = show_application(client, identifier)  # possible there is no SP created for the app
+
+    if not app:
+        raise CLIError("can't find an application matching '{}'".format(identifier))
+
+    # Created password
+    password = None
+    # Created certificate
+    cert_file = None
+    key_id = None
+
+    if not append:
+        # Delete all existing password
+        for cred in app['passwordCredentials']:
+            body = {
+                "keyId": cred['keyId']
+            }
+            client.application_password_remove(app['id'], body)
+
+    # By default, add password
+    if not (cert or create_cert):
+        add_password_result = _application_add_password(client, app, app_start_date, app_end_date, display_name)
+        password = add_password_result['secretText']
+        key_id = add_password_result['keyId']
+
+    else:
+        public_cert_string, cert_file, cert_start_date, cert_end_date = \
+            _process_certificate(cmd.cli_ctx, years, app_start_date, app_end_date, cert, create_cert,
+                                 keyvault)
+
+        app_start_date, app_end_date, cert_start_date, cert_end_date = \
+            _validate_app_dates(app_start_date, app_end_date, cert_start_date, cert_end_date)
+
+        key_creds = []
+        if append:
+            key_creds = app['keyCredentials']
+
+        new_key_creds = _build_key_credentials(
+            public_cert_string, start_date=app_start_date, end_date=app_end_date, display_name=display_name)
+
+        key_id = new_key_creds[0]['keyId']
+        key_creds.extend(new_key_creds)
+
+        patch_body = {
+            'keyCredentials': key_creds
+        }
+        client.application_patch(app['id'], body=patch_body)
+
+    result = {
+        'appId': app['appId'],
+        'keyId': key_id,
+        'password': password,
+        'tenant': client.tenant
+    }
+    if cert_file:
+        result['fileWithCertAndPrivateKey'] = cert_file
+
+    logger.warning(CREDENTIAL_WARNING)
+    return result
+
+
+def list_application_credentials(cmd, identifier, cert=False):
+    # Also see: list_service_principal_credentials
+    client = _graph_client_factory(cmd.cli_ctx)
+    app = show_application(client, identifier)
+    if cert:
+        return app['keyCredentials']
+    else:
+        return app['passwordCredentials']
 
 
 def create_service_principal(cmd, identifier):
@@ -1206,7 +1295,7 @@ def delete_service_principal(cmd, identifier):
         client.service_principals.delete(sp_object_id)
 
 
-def reset_service_principal_credential(cmd, name, create_cert=False, cert=None, years=None,
+def reset_service_principal_credential(cmd, identifier, create_cert=False, cert=None, years=None,
                                        end_date=None, keyvault=None, append=False, display_name=None):
     client = _graph_client_factory(cmd.cli_ctx)
 
@@ -1223,61 +1312,60 @@ def reset_service_principal_credential(cmd, name, create_cert=False, cert=None, 
         years = (app_end_date - app_start_date).days / 365
 
     # look for the existing application
-    query_exp = "servicePrincipalNames/any(x:x eq \'{0}\') or displayName eq '{0}'".format(name)
-    aad_sps = list(client.service_principal_list(filter=query_exp))
+    # TODO: support display name
+    sp = show_service_principal(client, identifier)
 
-    if len(aad_sps) > 1:
-        raise CLIError(
-            'more than one entry matches the name, please provide unique names like '
-            'app id guid, or app id uri')
-    app = (show_application(client, aad_sps[0]['appId']) if aad_sps else
-           show_application(client, name))  # possible there is no SP created for the app
-
-    if not app:
-        raise CLIError("can't find an application matching '{}'".format(name))
+    if not sp:
+        raise CLIError("can't find an application matching '{}'".format(identifier))
 
     # Created password
     password = None
     # Created certificate
     cert_file = None
+    key_id = None
 
     if not append:
         # Delete all existing password
-        for cred in app['passwordCredentials']:
+        for cred in sp['passwordCredentials']:
             body = {
                 "keyId": cred['keyId']
             }
-            client.application_password_remove(app['id'], body)
+            client.service_principal_password_remove(sp['id'], body)
 
     # By default, add password
     if not (cert or create_cert):
-        add_password_result = _application_add_password(client, app, app_start_date, app_end_date, display_name)
+        body = _build_add_password_credential_body(display_name, app_start_date, app_end_date)
+        add_password_result = client.service_principal_password_add(sp['id'], body)
         password = add_password_result['secretText']
+        key_id = add_password_result['keyId']
 
     else:
         public_cert_string, cert_file, cert_start_date, cert_end_date = \
-            _process_service_principal_certificate(cmd.cli_ctx, years, app_start_date, app_end_date, cert, create_cert,
-                                                   keyvault)
+            _process_certificate(cmd.cli_ctx, years, app_start_date, app_end_date, cert, create_cert,
+                                 keyvault)
 
         app_start_date, app_end_date, cert_start_date, cert_end_date = \
             _validate_app_dates(app_start_date, app_end_date, cert_start_date, cert_end_date)
 
         key_creds = []
         if append:
-            key_creds = app['keyCredentials']
+            key_creds = sp['keyCredentials']
 
         new_key_creds = _build_key_credentials(
             public_cert_string, start_date=app_start_date, end_date=app_end_date, display_name=display_name)
 
+        key_id = new_key_creds[0]['keyId']
         key_creds.extend(new_key_creds)
 
         patch_body = {
             'keyCredentials': key_creds
         }
-        client.application_patch(app['id'], body=patch_body)
+        client.service_principal_patch(sp['id'], body=patch_body)
 
     result = {
-        'appId': app['appId'],
+        'id': sp['id'],
+        'keyId': key_id,
+        'appId': sp['appId'],
         'password': password,
         'tenant': client.tenant
     }
@@ -1286,6 +1374,39 @@ def reset_service_principal_credential(cmd, name, create_cert=False, cert=None, 
 
     logger.warning(CREDENTIAL_WARNING)
     return result
+
+
+def list_service_principal_credentials(cmd, identifier, cert=False):
+    # Also see list_application_credentials
+    client = _graph_client_factory(cmd.cli_ctx)
+    sp = show_service_principal(client, identifier)
+    if cert:
+        return sp['keyCredentials']
+    else:
+        return sp['passwordCredentials']
+
+
+def delete_service_principal_credential(cmd, identifier, key_id, cert=False):
+    client = _graph_client_factory(cmd.cli_ctx)
+    sp = show_service_principal(client, identifier)
+
+    if cert:
+        key_creds = sp['keyCredentials']
+
+        to_delete = next((x for x in key_creds if x['keyId'] == key_id), None)
+        if to_delete:
+            key_creds.remove(to_delete)
+            body = {
+                'keyCredentials': key_creds
+            }
+            client.service_principal_patch(sp['id'], body)
+        raise CLIError("'{}' doesn't exist in the service principal of '{}'.".format(
+            key_id, identifier))
+    else:
+        body = {
+            "keyId": key_id
+        }
+        client.service_principal_password_remove(sp['id'], body)
 
 
 def _get_app_object_id_from_sp_object_id(client, sp_object_id):
@@ -1300,16 +1421,6 @@ def _get_app_object_id_from_sp_object_id(client, sp_object_id):
 def list_service_principal_owners(client, identifier):
     sp_object_id = _resolve_service_principal(client, identifier)
     return client.service_principal_owner_list(sp_object_id)
-
-
-def list_service_principal_credentials(cmd, identifier, cert=False):
-    graph_client = _graph_client_factory(cmd.cli_ctx)
-    if " sp " in cmd.name:
-        sp_object_id = _resolve_service_principal(graph_client.service_principals, identifier)
-        app_object_id = _get_app_object_id_from_sp_object_id(graph_client, sp_object_id)
-    else:
-        app_object_id = _resolve_application(graph_client.applications, identifier)
-    return _get_service_principal_credentials(graph_client, app_object_id, cert)
 
 
 # pylint: disable=inconsistent-return-statements
@@ -1348,7 +1459,7 @@ def create_service_principal_for_rbac(
         # https://docs.microsoft.com/en-us/graph/application-rollkey-prooftoken
         use_cert = True
         public_cert_string, cert_file, cert_start_date, cert_end_date = \
-            _process_service_principal_certificate(
+            _process_certificate(
                 cmd.cli_ctx, years, app_start_date, app_end_date, cert, create_cert, keyvault)
 
         app_start_date, app_end_date, cert_start_date, cert_end_date = \
@@ -1453,37 +1564,8 @@ def create_service_principal_for_rbac(
     return result
 
 
-def _get_service_principal_credentials(graph_client, app_object_id, cert=False):
-    if cert:
-        app_creds = list(graph_client.applications.list_key_credentials(app_object_id))
-    else:
-        app_creds = list(graph_client.applications.list_password_credentials(app_object_id))
-
-    return app_creds
-
-
-def delete_service_principal_credential(cmd, identifier, key_id, cert=False):
-    graph_client = _graph_client_factory(cmd.cli_ctx)
-    if " sp " in cmd.name:
-        sp_object_id = _resolve_service_principal(graph_client.service_principals, identifier)
-        app_object_id = _get_app_object_id_from_sp_object_id(graph_client, sp_object_id)
-    else:
-        app_object_id = _resolve_application(graph_client.applications, identifier)
-    result = _get_service_principal_credentials(graph_client, app_object_id, cert)
-
-    to_delete = next((x for x in result if x.key_id == key_id), None)
-    if to_delete:
-        result.remove(to_delete)
-        if cert:
-            return graph_client.applications.update_key_credentials(app_object_id, result)
-        return graph_client.applications.update_password_credentials(app_object_id, result)
-
-    raise CLIError("'{}' doesn't exist in the service principal of '{}' or associated application".format(
-        key_id, identifier))
-
-
 def _resolve_service_principal(client, identifier):
-    # todo: confirm with graph team that a service principal name must be unique
+    """Resolve a service principal and return its id."""
     result = client.service_principal_list(filter="servicePrincipalNames/any(c:c eq '{}')".format(identifier))
     if result:
         return result[0]['id']
@@ -1494,7 +1576,7 @@ def _resolve_service_principal(client, identifier):
     raise error
 
 
-def _process_service_principal_certificate(cli_ctx, years, app_start_date, app_end_date, cert, create_cert, keyvault):
+def _process_certificate(cli_ctx, years, app_start_date, app_end_date, cert, create_cert, keyvault):
     # The rest of the scenarios involve certificates
     public_cert_string = None
     cert_file = None
@@ -1922,6 +2004,18 @@ def _build_optional_claims(optional_claims):
     return optional_claims
 
 
+def _build_add_password_credential_body(display_name, start_datetime, end_datetime):
+    # https://docs.microsoft.com/en-us/graph/api/resources/passwordcredential
+    body = {
+        "passwordCredential": {
+            "displayName": display_name,
+            "endDateTime": _datetime_to_utc(end_datetime),
+            "startDateTime": _datetime_to_utc(start_datetime)
+        }
+    }
+    return body
+
+
 def _build_key_credentials(key_value=None, key_type=None, key_usage=None,
                            start_date=None, end_date=None, display_name=None, key_description=None):
     # TODO: display name
@@ -1960,3 +2054,8 @@ def _build_key_credentials(key_value=None, key_type=None, key_usage=None,
         "usage": key_usage
     }
     return [key_credential]
+
+
+def _reset_credentials(client, graph_object, create_cert=False, cert=None, years=None,
+                       end_date=None, keyvault=None, append=False, display_name=None):
+    pass
