@@ -71,7 +71,7 @@ class GraphClient:
 
     def application_list(self, filter=None):
         # https://docs.microsoft.com/en-us/graph/api/application-list
-        result = self._send("GET", "/applications?$filter={}".format(filter))
+        result = self._send("GET", "/applications" + _filter_to_query(filter))
         return result
 
     def application_delete(self, id):
@@ -121,7 +121,7 @@ class GraphClient:
 
     def service_principal_list(self, filter=None):
         # https://docs.microsoft.com/en-us/graph/api/serviceprincipal-list
-        result = self._send("GET", "/servicePrincipals?$filter={}".format(filter))
+        result = self._send("GET", "/servicePrincipals" + _filter_to_query(filter))
         return result
 
     def service_principal_delete(self, id):
@@ -163,3 +163,9 @@ class GraphClient:
         # https://docs.microsoft.com/en-us/graph/api/directoryobject-getbyids
         result = self._send("POST", "/directoryObjects/getByIds", body=body)
         return result
+
+
+def _filter_to_query(filter):
+    if filter is not None:
+        return "?$filter={}".format(filter)
+    return ''
