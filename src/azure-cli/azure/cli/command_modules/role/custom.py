@@ -615,9 +615,7 @@ def list_apps(cmd, client, app_id=None, display_name=None, identifier_uri=None, 
     if identifier_uri:
         sub_filters.append("identifierUris/any(s:s eq '{}')".format(identifier_uri))
 
-    # https://docs.microsoft.com/en-us/graph/api/application-list
-    result = client.application_list(filter=' and '.join(sub_filters))
-
+    result = client.application_list(filter=' and '.join(sub_filters) if sub_filters else None)
     if sub_filters or include_all:
         return list(result)
 
@@ -658,7 +656,7 @@ def list_sps(cmd, client, spn=None, display_name=None, query_filter=None, show_m
     if display_name:
         sub_filters.append("startswith(displayName,'{}')".format(display_name))
 
-    result = client.service_principal_list(filter=(' and '.join(sub_filters)))
+    result = client.service_principal_list(filter=' and '.join(sub_filters) if sub_filters else None)
 
     if sub_filters or include_all:
         return result
@@ -686,7 +684,7 @@ def list_users(client, upn=None, display_name=None, query_filter=None):
     if display_name:
         sub_filters.append("startswith(displayName,'{}')".format(display_name))
 
-    return client.list(filter=(' and ').join(sub_filters))
+    return client.list(filter=' and '.join(sub_filters) if sub_filters else None)
 
 
 def create_user(client, user_principal_name, display_name, password,
@@ -767,7 +765,7 @@ def list_groups(client, display_name=None, query_filter=None):
         sub_filters.append(query_filter)
     if display_name:
         sub_filters.append("startswith(displayName,'{}')".format(display_name))
-    return client.list(filter=(' and ').join(sub_filters))
+    return client.list(filter=' and '.join(sub_filters) if sub_filters else None)
 
 
 def list_group_owners(cmd, group_id):
