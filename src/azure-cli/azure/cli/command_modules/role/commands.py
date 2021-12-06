@@ -202,7 +202,7 @@ def load_command_table(self, _):
         g.custom_command('list', 'list_service_principal_owners')
 
     # RBAC related
-    with self.command_group('ad sp', exception_handler=graph_err_handler, transform=transform_graph_objects_with_cred) as g:
+    with self.command_group('ad sp', client_factory=get_graph_client, exception_handler=graph_err_handler, transform=transform_graph_objects_with_cred) as g:
         g.custom_command('create-for-rbac', 'create_service_principal_for_rbac')
         g.custom_command('credential reset', 'reset_service_principal_credential')
         g.custom_command('credential list', 'list_service_principal_credentials')
