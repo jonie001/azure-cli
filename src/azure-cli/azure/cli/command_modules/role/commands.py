@@ -208,13 +208,13 @@ def load_command_table(self, _):
         g.custom_command('credential list', 'list_service_principal_credentials')
         g.custom_command('credential delete', 'delete_service_principal_credential')
 
-    with self.command_group('ad user', role_users_sdk, exception_handler=graph_err_handler) as g:
-        g.command('delete', 'delete')
-        g.show_command('show', 'get')
-        g.custom_command('list', 'list_users', client_factory=get_graph_client_users)
+    with self.command_group('ad user', client_factory=get_graph_client, exception_handler=graph_err_handler) as g:
+        g.custom_command('delete', 'delete_user')
+        g.custom_show_command('show', 'show_user')
+        g.custom_command('list', 'list_users')
         g.custom_command('get-member-groups', 'get_user_member_groups')
-        g.custom_command('create', 'create_user', client_factory=get_graph_client_users, doc_string_source='azure.graphrbac.models#UserCreateParameters')
-        g.custom_command('update', 'update_user', client_factory=get_graph_client_users, validator=validate_change_password)
+        g.custom_command('create', 'create_user', doc_string_source='azure.graphrbac.models#UserCreateParameters')
+        g.custom_command('update', 'update_user', validator=validate_change_password)
 
     with self.command_group('ad signed-in-user', client_factory=get_graph_client, exception_handler=graph_err_handler,
                             transform=transform_graph_objects_with_cred) as g:

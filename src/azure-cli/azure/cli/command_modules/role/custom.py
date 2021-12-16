@@ -686,7 +686,7 @@ def list_users(client, upn=None, display_name=None, query_filter=None):
     if display_name:
         sub_filters.append("startswith(displayName,'{}')".format(display_name))
 
-    return client.list(filter=(' and ').join(sub_filters))
+    return client.user_list(filter=(' and ').join(sub_filters))
 
 
 def create_user(client, user_principal_name, display_name, password,
@@ -695,40 +695,52 @@ def create_user(client, user_principal_name, display_name, password,
     :param mail_nickname: mail alias. default to user principal name
     '''
     mail_nickname = mail_nickname or user_principal_name.split('@')[0]
-    param = UserCreateParameters(user_principal_name=user_principal_name, account_enabled=True,
-                                 display_name=display_name, mail_nickname=mail_nickname,
-                                 immutable_id=immutable_id,
-                                 password_profile=PasswordProfile(
-                                     password=password,
-                                     force_change_password_next_login=force_change_password_next_login))
-    return client.create(param)
+    body = {"accountEnabled":True,
+            "displayName":display_name,
+            "onPremisesImmutableId": immutable_id,
+            "mailNickname":mail_nickname,
+            "passwordProfile":{
+                "forceChangePasswordNextSignIn":force_change_password_next_login,
+                "password":password
+            },
+            "userPrincipalName":user_principal_name}
+
+    return client.user_create(body)
 
 
 def update_user(client, upn_or_object_id, display_name=None, force_change_password_next_login=None, password=None,
                 account_enabled=None, mail_nickname=None):
-    password_profile = None
-    if password is not None:
-        password_profile = PasswordProfile(password=password,
-                                           force_change_password_next_login=force_change_password_next_login)
+    body = {}
+    if account_enabled is not None:
+        body["accountEnabled"] = account_enabled
+    if display_name:
+        body["displayName"] = display_name
+    if mail_nickname:
+        body["mailNickname"] = mail_nickname
+    if password:
+        body["passwordProfile"]= {
+            "forceChangePasswordNextSignIn": force_change_password_next_login,
+            "password": password
+        }
+    return client.user_patch(id=upn_or_object_id, body=body)
 
-    update_parameters = UserUpdateParameters(display_name=display_name, password_profile=password_profile,
-                                             account_enabled=account_enabled, mail_nickname=mail_nickname)
-    return client.update(upn_or_object_id=upn_or_object_id, parameters=update_parameters)
+
+def show_user(client, id):
+    return client.user_get(id=id)
 
 
-def get_user_member_groups(cmd, upn_or_object_id, security_enabled_only=False):
-    graph_client = _graph_client_factory(cmd.cli_ctx)
+def delete_user(client, id):
+    client.user_delete(id=id)
+
+
+def get_user_member_groups(client, upn_or_object_id, security_enabled_only=False):
     if not is_guid(upn_or_object_id):
-        upn_or_object_id = graph_client.users.get(upn_or_object_id).object_id
+        upn_or_object_id = client.user_get(upn_or_object_id)["id"]
 
-    results = list(graph_client.users.get_member_groups(
-        upn_or_object_id, security_enabled_only=security_enabled_only))
-    try:
-        stubs = _get_object_stubs(graph_client, results)
-    except GraphErrorException:
-        stubs = []
-    stubs = {s.object_id: s.display_name for s in stubs}
-    return [{'objectId': x, 'displayName': stubs.get(x)} for x in results]
+    results = client.user_member_groups_get(id=upn_or_object_id)
+    if security_enabled_only:
+        results = [res for res in results if res["securityEnabled"]]
+    return [{'objectId': x["id"], 'displayName': x["displayName"]} for x in results]
 
 
 def create_group(cmd, display_name, mail_nickname, force=None, description=None):
