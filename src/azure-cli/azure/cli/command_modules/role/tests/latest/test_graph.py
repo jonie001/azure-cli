@@ -9,6 +9,7 @@ import datetime
 import dateutil
 import dateutil.parser
 from azure_devtools.scenario_tests import AllowLargeResponse
+from azure_devtools.scenario_tests.const import MOCKED_TENANT_ID
 from azure.cli.testsdk import ScenarioTest, AADGraphUserReplacer, MOCKED_USER_NAME
 from knack.util import CLIError
 
@@ -152,7 +153,7 @@ lBMWCjI8gO6W8YQMu7AH""".replace('\n', '')
             self.assertEqual(self.cmd('ad sp show --id 00000000-0000-0000-0000-000000000000').exit_code, 3)
 
 
-class ApplicationSetScenarioTest(ScenarioTest):
+class ApplicationScenarioTest(ScenarioTest):
 
     def test_application_scenario(self):
         display_name = self.create_random_name(prefix='azure-cli-test-graph-app', length=30)
@@ -160,7 +161,10 @@ class ApplicationSetScenarioTest(ScenarioTest):
         # identifierUris must be on verified domain
         # https://docs.microsoft.com/en-us/azure/active-directory/develop/security-best-practices-for-app-registration#appid-uri-configuration
 
+        # tenant_id will be 0000... in playback mode, so register it in name_replacer
         tenant_id = self.cmd('account show --query tenantId').get_output_in_json()
+        self.name_replacer.register_name_pair(tenant_id, MOCKED_TENANT_ID)
+
         identifier_uri = f'api://{tenant_id}/{display_name}'
 
         self.kwargs.update({
@@ -238,9 +242,10 @@ class ApplicationSetScenarioTest(ScenarioTest):
             #          checks=self.check('oauth2AllowUrlPathMatching', True))
 
             # update app_roles
-            # self.cmd("ad app update --id {app} --app-roles '{app_roles}'")
-            # self.cmd('ad app show --id {app}',
-            #          checks=self.check('length(appRoles)', 1))
+            self.cmd("ad app update --id {app_id} --app-roles '{app_roles}'")
+            result = self.cmd('ad app show --id {app_id}', checks=self.check('length(appRoles)', 1))\
+                .get_output_in_json()
+            assert result['appRoles'][0]['displayName'] == 'Approver'
 
             # delete app
             self.cmd('ad app delete --id {app_id}')
@@ -248,8 +253,10 @@ class ApplicationSetScenarioTest(ScenarioTest):
             self.cmd('ad app list --identifier-uri {identifier_uri}', checks=self.is_empty())
             self.cmd('ad app list --app-id {app_id}', checks=self.is_empty())
         finally:
-            if app_id:
+            try:
                 self.cmd("ad app delete --id " + app_id)
+            except:
+                pass
 
     def test_app_show_exit_code(self):
         with self.assertRaises(SystemExit):
@@ -257,45 +264,59 @@ class ApplicationSetScenarioTest(ScenarioTest):
             self.assertEqual(self.cmd('ad app show --id 00000000-0000-0000-0000-000000000000').exit_code, 3)
 
     def test_application_optional_claims(self):
-        name1 = self.create_random_name(prefix='cli-app-', length=14)
-        name2 = self.create_random_name(prefix='cli-app-', length=14)
-        self.kwargs.update({
-            'name1': name1,
-            'name2': name2,
-            'optional_claims': json.dumps({
-                "idToken": [
-                    {
-                        "name": "auth_time",
-                        "source": None,
-                        "essential": False
-                    }
-                ],
-                "accessToken": [
-                    {
-                        "name": "email",
-                        "source": None,
-                        "essential": False
-                    }
-                ]
+        try:
+            # Create with optionalClaims
+            name1 = self.create_random_name(prefix='cli-app-', length=14)
+            self.kwargs.update({
+                'name1': name1,
+                'optional_claims': json.dumps({
+                    "idToken": [
+                        {
+                            "name": "auth_time",
+                            "source": None,
+                            "essential": False
+                        }
+                    ],
+                    "accessToken": [
+                        {
+                            "name": "email",
+                            "source": None,
+                            "essential": False
+                        }
+                    ]
+                })
             })
-        })
-        self.cmd("ad app create --display-name {name1} --optional-claims '{optional_claims}'",
-                 checks=[
-                     self.check('displayName', '{name1}'),
-                     self.check('length(optionalClaims.idToken)', 1),
-                     self.check('length(optionalClaims.accessToken)', 1)
-                 ])
-        app_id = self.cmd('ad app create --display-name {name2}').get_output_in_json()['appId']
-        self.kwargs.update({
-            'app_id': app_id
-        })
-        self.cmd("ad app update --id {app_id} --optional-claims '{optional_claims}'")
-        self.cmd('ad app show --id {app_id}',
-                 checks=[
-                     self.check('displayName', '{name2}'),
-                     self.check('length(optionalClaims.idToken)', 1),
-                     self.check('length(optionalClaims.accessToken)', 1)
-                 ])
+
+            app_id1 = self.cmd("ad app create --display-name {name1} --optional-claims '{optional_claims}'",
+                               checks=[
+                                   self.check('displayName', '{name1}'),
+                                   self.check('length(optionalClaims.idToken)', 1),
+                                   self.check('length(optionalClaims.accessToken)', 1)
+                               ]).get_output_in_json()['appId']
+
+            # Create with no optionalClaims, then update with optionalClaims
+            name2 = self.create_random_name(prefix='cli-app-', length=14)
+            self.kwargs.update({
+                "name2": name2
+            })
+            app_id2 = self.cmd('ad app create --display-name {name2}').get_output_in_json()['appId']
+            self.kwargs.update({
+                'app_id': app_id2
+            })
+
+            self.cmd("ad app update --id {app_id} --optional-claims '{optional_claims}'")
+            self.cmd('ad app show --id {app_id}',
+                     checks=[
+                         self.check('displayName', '{name2}'),
+                         self.check('length(optionalClaims.idToken)', 1),
+                         self.check('length(optionalClaims.accessToken)', 1)
+                     ])
+        finally:
+            try:
+                self.cmd("ad app delete --id " + app_id1)
+                self.cmd("ad app delete --id " + app_id2)
+            except:
+                pass
 
 
 class CreateForRbacScenarioTest(ScenarioTest):
