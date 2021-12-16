@@ -164,12 +164,6 @@ class GraphClient:
         result = self._send("POST", "/directoryObjects/getByIds", body=body)
         return result
 
-
-    def _filter_to_query(filter):
-        if filter is not None:
-            return "?$filter={}".format(filter)
-        return ''
-
     def user_create(self, body):
         # https://docs.microsoft.com/graph/api/user-post-users
         result = self._send("POST", "/users", body=body)
@@ -182,7 +176,7 @@ class GraphClient:
 
     def user_list(self, filter):
         # https://docs.microsoft.com/graph/api/user-list
-        result = self._send("GET", "/users?$filter={}".format(filter))
+        result = self._send("GET", "/users" + _filter_to_query(filter))
         return result
 
     def user_delete(self, id):
@@ -199,3 +193,8 @@ class GraphClient:
         # https://docs.microsoft.com/graph/api/user-list-memberof
         result = self._send("GET", "/users/{}/memberOf".format(id))
         return result
+
+def _filter_to_query(filter):
+    if filter is not None:
+        return "?$filter={}".format(filter)
+    return ''

@@ -368,6 +368,37 @@ class CreateForRbacScenarioTest(ScenarioTest):
                 self.cmd('ad sp delete --id {app_id}')
 
 
+class GraphUserScenarioTest(ScenarioTest):
+    def test_graph_user_scenario(self):
+        self.kwargs = {
+            'user1': self.create_random_name(prefix='graphusertest', length=20),
+            'domain': 'AzureSDKTeam.onmicrosoft.com',
+            'new_mail_nick_name': 'graphusertest',
+            'group': 'graphusertest_g',
+            'pass': 'Test1234!!'
+        }
+        # create
+        user1_result = self.cmd(
+            'ad user create --display-name {user1} --password {pass} --user-principal-name {user1}@{domain}',
+            checks=[self.check("displayName","{user1}")]
+        ).get_output_in_json()
+        self.kwargs['user1_id'] = user1_result['id']
+
+        # update
+        self.cmd(
+            'ad user update --display-name {user1}_new --account-enabled false --id {user1}@{domain} --mail-nickname {new_mail_nick_name}')
+        # show
+        user1_update_result = self.cmd('ad user show --id {user1}@{domain}',
+                                       checks=[self.check("displayName", '{user1}_new')]
+                                       ).get_output_in_json()
+
+        # list
+        self.cmd('ad user list')
+
+        # delete
+        self.cmd('ad user delete --id {user1_id}')
+
+
 class GraphGroupScenarioTest(ScenarioTest):
 
     def test_graph_group_scenario(self):
