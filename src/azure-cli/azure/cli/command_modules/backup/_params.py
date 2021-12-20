@@ -146,7 +146,7 @@ def load_arguments(self, _):
         c.argument('use_secondary_region', action='store_true', help='Use this flag to list containers in secondary region.')
 
     with self.argument_context('backup container unregister') as c:
-        c.argument('backup_management_type', backup_management_type)
+        c.argument('backup_management_type', extended_backup_management_type)
         c.argument('container_name', container_name_type, id_part='child_name_2')
 
     with self.argument_context('backup container re-register') as c:
@@ -380,7 +380,7 @@ def load_arguments(self, _):
         c.argument('item_name', item_name_type, id_part='child_name_3')
         c.argument('restore_mode', restore_mode_workload_type)
         c.argument('vault_name', vault_name_type, id_part='name')
-        c.argument('log_point_in_time', options_list=['--log-point-in-time'], help="""Specify the point-in-time which will be restored.""")
+        c.argument('log_point_in_time', options_list=['--log-point-in-time'], help="""Specify the point-in-time (in UTC) which will be restored.""")
         c.argument('rp_name', rp_name_type)
         c.argument('target_item_name', options_list=['--target-item-name'], help="""Specify the target item name for the restore operation.""")
         c.argument('target_server_type', target_server_type)
