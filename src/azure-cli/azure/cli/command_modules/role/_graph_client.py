@@ -194,6 +194,7 @@ class GraphClient:
         result = self._send("GET", "/users/{}/memberOf".format(id))
         return result
 
+
 def _filter_to_query(filter):
     if filter is not None:
         return "?$filter={}".format(filter)

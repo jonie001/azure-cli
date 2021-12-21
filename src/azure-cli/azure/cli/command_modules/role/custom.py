@@ -685,15 +685,15 @@ def create_user(client, user_principal_name, display_name, password,
     :param mail_nickname: mail alias. default to user principal name
     '''
     mail_nickname = mail_nickname or user_principal_name.split('@')[0]
-    body = {"accountEnabled":True,
-            "displayName":display_name,
+    body = {"accountEnabled": True,
+            "displayName": display_name,
             "onPremisesImmutableId": immutable_id,
-            "mailNickname":mail_nickname,
-            "passwordProfile":{
-                "forceChangePasswordNextSignIn":force_change_password_next_login,
-                "password":password
+            "mailNickname": mail_nickname,
+            "passwordProfile": {
+                "forceChangePasswordNextSignIn": force_change_password_next_login,
+                "password": password
             },
-            "userPrincipalName":user_principal_name}
+            "userPrincipalName": user_principal_name}
 
     return client.user_create(body)
 
@@ -715,12 +715,12 @@ def update_user(client, upn_or_object_id, display_name=None, force_change_passwo
     return client.user_patch(id=upn_or_object_id, body=body)
 
 
-def show_user(client, id):
-    return client.user_get(id=id)
+def show_user(client, upn_or_object_id):
+    return client.user_get(id=upn_or_object_id)
 
 
-def delete_user(client, id):
-    client.user_delete(id=id)
+def delete_user(client, upn_or_object_id):
+    client.user_delete(id=upn_or_object_id)
 
 
 def get_user_member_groups(client, upn_or_object_id, security_enabled_only=False):
