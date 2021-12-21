@@ -94,9 +94,9 @@ class GraphClient:
         result = self._send("GET", "/applications/{id}/owners".format(id=id))
         return result
 
-    def application_owner_remove(self, id):
+    def application_owner_remove(self, id, owner_id):
         # https://docs.microsoft.com/en-us/graph/api/application-delete-owners
-        result = self._send("DELETE", "/applications/{id}/owners/{id}/$ref".format(id=id))
+        result = self._send("DELETE", "/applications/{id}/owners/{owner_id}/$ref".format(id=id, owner_id=owner_id))
         return result
 
     def application_password_add(self, id, body):

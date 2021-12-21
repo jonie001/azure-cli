@@ -622,18 +622,21 @@ def list_application_owners(client, identifier):
     return client.application_owner_list(_resolve_application(client, identifier))
 
 
-def add_application_owner(cmd, owner_object_id, identifier):
-    graph_client = _graph_client_factory(cmd.cli_ctx)
-    app_object_id = _resolve_application(graph_client.applications, identifier)
-    owners = graph_client.applications.list_owners(app_object_id)
-    if not next((x for x in owners if x.object_id == owner_object_id), None):
-        owner_url = _get_owner_url(cmd.cli_ctx, owner_object_id)
-        graph_client.applications.add_owner(app_object_id, owner_url)
+def add_application_owner(client, owner_object_id, identifier):
+    app_object_id = _resolve_application(client, identifier)
+    owners = client.application_owner_list(app_object_id)
+    # Graph is not idempotent and fails with:
+    #   One or more added object references already exist for the following modified properties: 'owners'
+    # We make it idempotent.
+    if not next((x for x in owners if x['id'] == owner_object_id), None):
+        owner_url = _get_owner_url(client, owner_object_id)
+        body = {"@odata.id": owner_url}
+        client.application_owner_add(app_object_id, body)
 
 
-def remove_application_owner(cmd, owner_object_id, identifier):
-    client = _graph_client_factory(cmd.cli_ctx).applications
-    return client.remove_owner(_resolve_application(client, identifier), owner_object_id)
+def remove_application_owner(client, owner_object_id, identifier):
+    app_object_id = _resolve_application(client, identifier)
+    return client.application_owner_remove(app_object_id, owner_object_id)
 
 
 def list_sps(cmd, client, spn=None, display_name=None, query_filter=None, show_mine=None, include_all=None):
@@ -1692,14 +1695,10 @@ def _get_object_stubs(graph_client, assignees):
     return result
 
 
-def _get_owner_url(cli_ctx, owner_object_id):
+def _get_owner_url(client, owner_object_id):
     if '://' in owner_object_id:
         return owner_object_id
-    graph_url = cli_ctx.cloud.endpoints.active_directory_graph_resource_id
-    from azure.cli.core._profile import Profile
-    profile = Profile(cli_ctx=cli_ctx)
-    _, _2, tenant_id = profile.get_login_credentials()
-    return graph_url + tenant_id + '/directoryObjects/' + owner_object_id
+    return "{base_url}/directoryObjects/{id}".format(base_url=client.base_url, id=owner_object_id)
 
 
 def _set_owner(cli_ctx, graph_client, asset_object_id, setter):
@@ -1711,35 +1710,6 @@ def _set_owner(cli_ctx, graph_client, asset_object_id, setter):
 # for injecting test seems to produce predictable role assignment id for playback
 def _gen_guid():
     return uuid.uuid4()
-
-
-# reference: https://pynative.com/python-generate-random-string/
-def _random_password(length):
-    import random
-    import string
-    safe_punctuation = '-_.~'
-    random_source = string.ascii_letters + string.digits + safe_punctuation
-    alphanumeric = string.ascii_letters + string.digits
-
-    # make sure first character is not a punctuation like '--' which will make CLI command break
-    first_character = random.SystemRandom().choice(alphanumeric)
-
-    # make sure we have special character in the password
-    password = random.SystemRandom().choice(string.ascii_lowercase)
-    password += random.SystemRandom().choice(string.ascii_uppercase)
-    password += random.SystemRandom().choice(string.digits)
-    password += random.SystemRandom().choice(safe_punctuation)
-
-    # generate a password of the given length from the options in the random_source variable
-    for _ in range(length - 5):
-        password += random.SystemRandom().choice(random_source)
-
-    # turn it into a list for some extra shuffling
-    password_list = list(password)
-    random.SystemRandom().shuffle(password_list)
-
-    password = first_character + ''.join(password_list)
-    return password
 
 
 def list_user_assigned_identities(cmd, resource_group_name=None):

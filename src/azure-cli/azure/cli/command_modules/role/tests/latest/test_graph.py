@@ -555,10 +555,11 @@ class GraphOwnerScenarioTest(ScenarioTest):
         }
         self.recording_processors.append(AADGraphUserReplacer(owner, 'example@example.com'))
         try:
-            self.kwargs['owner_object_id'] = self.cmd('ad user show --upn-or-object-id {owner}').get_output_in_json()['objectId']
-            self.kwargs['app_id'] = self.cmd('ad sp create-for-rbac -n {display_name} --skip-assignment').get_output_in_json()['appId']
+            # TODO: Wait for user commands to be migrated
+            self.kwargs['owner_object_id'] = self.cmd('ad user show --id {owner}').get_output_in_json()['id']
+            self.kwargs['app_id'] = self.cmd('ad sp create-for-rbac -n {display_name}').get_output_in_json()['appId']
             self.cmd('ad app owner add --owner-object-id {owner_object_id} --id {app_id}')
-            self.cmd('ad app owner add --owner-object-id {owner_object_id} --id {app_id}')  # test idempotent
+            self.cmd('ad app owner add --owner-object-id {owner_object_id} --id {app_id}')  # test idempotence
             self.cmd('ad app owner list --id {app_id}', checks=self.check('[0].userPrincipalName', owner))
             self.cmd('ad app owner remove --owner-object-id {owner_object_id} --id {app_id}')
             self.cmd('ad app owner list --id {app_id}', checks=self.check('length([*])', 0))
