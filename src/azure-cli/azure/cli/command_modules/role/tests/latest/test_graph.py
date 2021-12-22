@@ -568,7 +568,6 @@ def get_signed_in_user(test_case):
     else:
         account_info = test_case.cmd('account show').get_output_in_json()
         if account_info['user']['type'] != 'servicePrincipal':
-            return "yishiwang_microsoft.com#EXT#@AzureSDKTeam.onmicrosoft.com"
             return account_info['user']['name']
     return None
 
