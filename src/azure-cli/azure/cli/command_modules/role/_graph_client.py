@@ -164,6 +164,61 @@ class GraphClient:
         result = self._send("POST", "/directoryObjects/getByIds", body=body)
         return result
 
+    def directory_object_get_member_groups(self, id, body):
+        # https://docs.microsoft.com/en-us/graph/api/directoryobject-getmembergroups
+        result = self._send("POST", "/groups/{id}/getMemberGroups".format(id=id), body=body)
+        return result
+
+    def group_create(self, body):
+        # https://docs.microsoft.com/en-us/graph/api/group-post-groups
+        result = self._send("POST", "/groups", body=body)
+        return result
+
+    def group_get(self, id):
+        # https://docs.microsoft.com/en-us/graph/api/group-get
+        result = self._send("GET", "/groups/{id}".format(id=id))
+        return result
+
+    def group_list(self, filter=None):
+        # https://docs.microsoft.com/en-us/graph/api/group-list
+        result = self._send("GET", "/groups" + _filter_to_query(filter))
+        return result
+
+    def group_delete(self, id):
+        # https://docs.microsoft.com/en-us/graph/api/group-delete
+        result = self._send("DELETE", "/groups/{id}".format(id=id))
+        return result
+
+    def group_owner_list(self, id):
+        # https://docs.microsoft.com/en-us/graph/api/group-list-owners
+        result = self._send("GET", "/groups/{id}/owners".format(id=id))
+        return result
+
+    def group_owner_add(self, id, body):
+        # https://docs.microsoft.com/en-us/graph/api/group-post-owners
+        result = self._send("POST", "/groups/{id}/owners/$ref".format(id=id), body=body)
+        return result
+
+    def group_owner_remove(self, id, owner_id):
+        # https://docs.microsoft.com/en-us/graph/api/group-delete-owners
+        result = self._send("DELETE", "/groups/{id}/owners/{owner_id}/$ref".format(id=id, owner_id=owner_id))
+        return result
+
+    def group_member_list(self, id):
+        # https://docs.microsoft.com/en-us/graph/api/group-list-members
+        result = self._send("GET", '/groups/{id}/members'.format(id=id))
+        return result
+
+    def group_member_add(self, id, body):
+        # https://docs.microsoft.com/en-us/graph/api/group-post-members
+        result = self._send("POST", "/groups/{id}/members/$ref".format(id=id), body=body)
+        return result
+
+    def group_member_remove(self, id, member_id):
+        # https://docs.microsoft.com/en-us/graph/api/group-delete-members
+        result = self._send("DELETE", "/groups/{id}/owners/{member_id}/$ref".format(id=id, member_id=member_id))
+        return result
+
     def user_create(self, body):
         # https://docs.microsoft.com/graph/api/user-post-users
         result = self._send("POST", "/users", body=body)
