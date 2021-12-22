@@ -679,39 +679,46 @@ def list_users(client, upn=None, display_name=None, query_filter=None):
     return client.user_list(filter=' and '.join(sub_filters) if sub_filters else None)
 
 
+def _set_user_properties(body, user_principal_name=None, display_name=None, password=None,
+                mail_nickname=None, immutable_id=None, force_change_password_next_login=None, account_enabled=None):
+    if user_principal_name is not None:
+        body["userPrincipalName"] = user_principal_name
+    if display_name is not None:
+        body["displayName"] =  display_name
+    if password is not None:
+        body["passwordProfile"] = {
+            "password": password
+        }
+        if force_change_password_next_login is not None:
+            body["passwordProfile"]["forceChangePasswordNextSignIn"] = force_change_password_next_login
+    if mail_nickname is not None:
+        body["mailNickname"] = mail_nickname
+    if immutable_id is not None:
+        body["onPremisesImmutableId"] = immutable_id
+    if account_enabled is not None:
+        body["accountEnabled"] = account_enabled
+
+
+
 def create_user(client, user_principal_name, display_name, password,
                 mail_nickname=None, immutable_id=None, force_change_password_next_login=False):
     '''
     :param mail_nickname: mail alias. default to user principal name
     '''
     mail_nickname = mail_nickname or user_principal_name.split('@')[0]
-    body = {"accountEnabled": True,
-            "displayName": display_name,
-            "onPremisesImmutableId": immutable_id,
-            "mailNickname": mail_nickname,
-            "passwordProfile": {
-                "forceChangePasswordNextSignIn": force_change_password_next_login,
-                "password": password
-            },
-            "userPrincipalName": user_principal_name}
-
+    body = {}
+    _set_user_properties(body, user_principal_name=user_principal_name, display_name=display_name, password=password,
+                         mail_nickname=mail_nickname, immutable_id=immutable_id,
+                         force_change_password_next_login=force_change_password_next_login, account_enabled=True)
     return client.user_create(body)
 
 
 def update_user(client, upn_or_object_id, display_name=None, force_change_password_next_login=None, password=None,
                 account_enabled=None, mail_nickname=None):
     body = {}
-    if account_enabled is not None:
-        body["accountEnabled"] = account_enabled
-    if display_name:
-        body["displayName"] = display_name
-    if mail_nickname:
-        body["mailNickname"] = mail_nickname
-    if password:
-        body["passwordProfile"]= {
-            "forceChangePasswordNextSignIn": force_change_password_next_login,
-            "password": password
-        }
+    _set_user_properties(body, display_name=display_name, password=password, mail_nickname=mail_nickname,
+                         force_change_password_next_login=force_change_password_next_login,
+                         account_enabled=account_enabled)
     return client.user_patch(id=upn_or_object_id, body=body)
 
 
@@ -730,7 +737,7 @@ def get_user_member_groups(client, upn_or_object_id, security_enabled_only=False
     results = client.user_member_groups_get(id=upn_or_object_id)
     if security_enabled_only:
         results = [res for res in results if res["securityEnabled"]]
-    return [{'objectId': x["id"], 'displayName': x["displayName"]} for x in results]
+    return results
 
 
 def create_group(cmd, display_name, mail_nickname, force=None, description=None):

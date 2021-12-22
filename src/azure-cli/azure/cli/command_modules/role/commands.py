@@ -213,7 +213,7 @@ def load_command_table(self, _):
         g.custom_show_command('show', 'show_user')
         g.custom_command('list', 'list_users')
         g.custom_command('get-member-groups', 'get_user_member_groups')
-        g.custom_command('create', 'create_user', doc_string_source='azure.graphrbac.models#UserCreateParameters')
+        g.custom_command('create', 'create_user')
         g.custom_command('update', 'update_user', validator=validate_change_password)
 
     with self.command_group('ad signed-in-user', client_factory=get_graph_client, exception_handler=graph_err_handler,
