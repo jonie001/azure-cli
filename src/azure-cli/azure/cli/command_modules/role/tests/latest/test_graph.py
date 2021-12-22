@@ -340,11 +340,9 @@ class CreateForRbacScenarioTest(ScenarioTest):
             # No role assignment
             self.assertFalse(result)
 
-            self.cmd('ad sp delete --id {app_id}')
-            self.cmd('ad sp list --spn {app_id}',
-                     checks=self.check('length([])', 0))
-            self.cmd('ad app list --app-id {app_id}',
-                     checks=self.check('length([])', 0))
+            self.cmd('ad app delete --id {app_id}')
+            self.cmd('ad sp list --spn {app_id}', checks=self.check('length([])', 0))
+            self.cmd('ad app list --app-id {app_id}', checks=self.check('length([])', 0))
 
     @AllowLargeResponse()
     def test_create_for_rbac_with_role_assignment(self):
@@ -585,7 +583,6 @@ class GraphOwnerScenarioTest(ScenarioTest):
         }
         self.recording_processors.append(AADGraphUserReplacer(owner, 'example@example.com'))
         try:
-            # TODO: Wait for user commands to be migrated
             self.kwargs['owner_object_id'] = self.cmd('ad user show --id {owner}').get_output_in_json()['id']
             self.kwargs['app_id'] = self.cmd('ad sp create-for-rbac -n {display_name}').get_output_in_json()['appId']
             self.cmd('ad app owner add --owner-object-id {owner_object_id} --id {app_id}')
@@ -594,8 +591,10 @@ class GraphOwnerScenarioTest(ScenarioTest):
             self.cmd('ad app owner remove --owner-object-id {owner_object_id} --id {app_id}')
             self.cmd('ad app owner list --id {app_id}', checks=self.check('length([*])', 0))
         finally:
-            if self.kwargs['app_id']:
+            try:
                 self.cmd('ad sp delete --id {app_id}')
+            except:
+                pass
 
     def test_graph_group_ownership(self):
         owner = get_signed_in_user(self)

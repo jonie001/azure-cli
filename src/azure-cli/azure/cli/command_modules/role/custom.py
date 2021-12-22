@@ -41,6 +41,20 @@ from ._client_factory import _auth_client_factory, _graph_client_factory
 from ._multi_api_adaptor import MultiAPIAdaptor
 from ._graph_client import GraphClient
 
+# ARM RBAC's principalType
+USER = 'User'
+SERVICE_PRINCIPAL = 'ServicePrincipal'
+GROUP = 'Group'
+
+# Map Graph '@odata.type' to ARM RBAC's principalType
+ODATA_TYPE_TO_PRINCIPAL_TYPE = {
+    '#microsoft.graph.user': USER,
+    '#microsoft.graph.servicePrincipal': SERVICE_PRINCIPAL,
+    '#microsoft.graph.group': GROUP
+}
+
+# Object ID property name
+ID = 'id'
 
 CREDENTIAL_WARNING = (
     "The output includes credentials that you must protect. Be sure that you do not include these credentials in "
@@ -252,7 +266,7 @@ def list_role_assignments(cmd, assignee=None, role=None, resource_group_name=Non
     if principal_ids:
         try:
             principals = _get_object_stubs(graph_client, principal_ids)
-            principal_dics = {i['id']: _get_displayable_name(i) for i in principals}
+            principal_dics = {i[ID]: _get_displayable_name(i) for i in principals}
 
             for i in [r for r in results if not r.get('principalName')]:
                 i['principalName'] = ''
@@ -628,7 +642,7 @@ def add_application_owner(client, owner_object_id, identifier):
     # Graph is not idempotent and fails with:
     #   One or more added object references already exist for the following modified properties: 'owners'
     # We make it idempotent.
-    if not next((x for x in owners if x['id'] == owner_object_id), None):
+    if not next((x for x in owners if x[ID] == owner_object_id), None):
         owner_url = _get_owner_url(client, owner_object_id)
         body = {"@odata.id": owner_url}
         client.application_owner_add(app_object_id, body)
@@ -871,10 +885,10 @@ def create_application(cmd, client, display_name, identifier_uris=None,
         existing_apps = [x for x in existing_apps if x['displayName'] == display_name]
         if len(existing_apps) > 1:
             raise CLIError("More than one application have the same display name '{}': (id) {}, please remove "
-                           'them first.'.format(display_name, ', '.join([x['id'] for x in existing_apps])))
+                           'them first.'.format(display_name, ', '.join([x[ID] for x in existing_apps])))
         if len(existing_apps) == 1:
             logger.warning("Found an existing application instance: (id) %s. We will patch it.",
-                           existing_apps[0]['id'])
+                           existing_apps[0][ID])
             body = update_application(
                 existing_apps[0], display_name=display_name, identifier_uris=identifier_uris,
                 is_fallback_public_client=is_fallback_public_client, sign_in_audience=sign_in_audience,
@@ -892,10 +906,10 @@ def create_application(cmd, client, display_name, identifier_uris=None,
                 app_roles=app_roles,
                 optional_claims=optional_claims,
                 required_resource_accesses=required_resource_accesses)
-            patch_application(cmd, existing_apps[0]['id'], body)
+            patch_application(cmd, existing_apps[0][ID], body)
 
             # no need to resolve identifierUris or appId. Just use id.
-            return client.application_get(existing_apps[0]['id'])
+            return client.application_get(existing_apps[0][ID])
 
     if not identifier_uris:
         identifier_uris = []
@@ -1005,7 +1019,7 @@ def _resolve_application(client, identifier):
             error.status_code = 404  # Make sure CLI returns 3
             raise error
 
-    return result[0]['id'] if result else identifier
+    return result[0][ID] if result else identifier
 
 
 def reset_application_credential(cmd, client, identifier, create_cert=False, cert=None, years=None,
@@ -1276,7 +1290,7 @@ def delete_service_principal(cmd, identifier):
         assignments = list_role_assignments(cmd, assignee=identifier, show_all=True)
         if assignments:
             logger.warning('Removing role assignments')
-            delete_role_assignments(cmd, [a['id'] for a in assignments])
+            delete_role_assignments(cmd, [a[ID] for a in assignments])
 
     if app_object_id:  # delete the application, and AAD service will automatically clean up the SP
         logger.info("Deleting associated application %s", app_object_id)
@@ -1351,7 +1365,7 @@ def create_service_principal_for_rbac(
         app_display_name = name
         # patch existing app with the same displayName to make the command idempotent
         query_exp = "displayName eq '{}'".format(name)
-        existing_sps = list(graph_client.service_principals.list(filter=query_exp))
+        existing_sps = list(graph_client.service_principal_list(filter=query_exp))
 
     app_start_date = datetime.datetime.now(datetime.timezone.utc)
     app_end_date = app_start_date + relativedelta(years=years or 1)
@@ -1378,10 +1392,14 @@ def create_service_principal_for_rbac(
                                          key_value=public_cert_string,
                                          start_date=app_start_date,
                                          end_date=app_end_date)
-    # pylint: disable=no-member
     app_id = aad_application['appId']
     logger.warning("Created application: appId=%s, id=%s, displayName=%s",
-                   app_id, aad_application['id'], aad_application['displayName'])
+                   app_id, aad_application[ID], aad_application['displayName'])
+
+    # For existing applications, delete all passwords first.
+    for cred in aad_application['passwordCredentials']:
+        body = {"keyId": cred['keyId']}
+        graph_client.application_password_remove(aad_application[ID], body)
 
     # Password credential is created *after* application creation.
     # https://docs.microsoft.com/en-us/graph/api/resources/passwordcredential
@@ -1412,7 +1430,7 @@ def create_service_principal_for_rbac(
                         if hasattr(ex, 'response') else ex)  # pylint: disable=no-member
                     raise
     sp_app_id = aad_sp['appId']
-    sp_oid = aad_sp['id']
+    sp_oid = aad_sp[ID]
     logger.warning("Created service principal: appId=%s, id=%s", sp_app_id, sp_oid)
 
     if role:
@@ -1470,7 +1488,7 @@ def _resolve_service_principal(client, identifier):
     """Resolve a service principal and return its id."""
     result = client.service_principal_list(filter="servicePrincipalNames/any(c:c eq '{}')".format(identifier))
     if result:
-        return result[0]['id']
+        return result[0][ID]
     if is_guid(identifier):
         return identifier  # assume an object id
     error = CLIError("Service principal '{}' doesn't exist".format(identifier))
@@ -1535,7 +1553,7 @@ def _validate_app_dates(app_start_date, app_end_date, cert_start_date, cert_end_
 
 def _get_signed_in_user_object_id(graph_client):
     try:
-        return graph_client.signed_in_user_get()['id']
+        return graph_client.signed_in_user_get()[ID]
     except GraphErrorException:  # error could be possible if you logged in as a service principal
         pass
 
@@ -1710,23 +1728,29 @@ def _resolve_object_id(cli_ctx, assignee, fallback_to_object_id=False):
 
 def _resolve_object_id_and_type(cli_ctx, assignee, fallback_to_object_id=False):
     client = _graph_client_factory(cli_ctx)
-    result = None
     try:
+        # Try resolving as user
         if assignee.find('@') >= 0:  # looks like a user principal name
-            result = list(client.users.list(filter="userPrincipalName eq '{}'".format(assignee)))
-        if not result:
-            result = list(client.service_principals.list(
-                filter="servicePrincipalNames/any(c:c eq '{}')".format(assignee)))
-        if not result and is_guid(assignee):  # assume an object id, let us verify it
+            result = list(client.user_list(filter="userPrincipalName eq '{}'".format(assignee)))
+            if result:
+                return result[0][ID], USER
+
+        # Try resolving as service principal
+        result = list(client.service_principal_list(
+            filter="servicePrincipalNames/any(c:c eq '{}')".format(assignee)))
+        if result:
+            return result[0][ID], SERVICE_PRINCIPAL
+
+        # Try resolving as object ID
+        if is_guid(assignee):  # assume an object id, let us verify it
             result = _get_object_stubs(client, [assignee])
+            if result:
+                return result[0][ID], ODATA_TYPE_TO_PRINCIPAL_TYPE.get(result[0]['@odata.type'])
 
         # 2+ matches should never happen, so we only check 'no match' here
-        if not result:
-            raise CLIError("Cannot find user or service principal in graph database for '{assignee}'. "
-                           "If the assignee is an appId, make sure the corresponding service principal is created "
-                           "with 'az ad sp create --id {assignee}'.".format(assignee=assignee))
-
-        return result[0].object_id, result[0].object_type
+        raise CLIError("Cannot find user or service principal in graph database for '{assignee}'. "
+                       "If the assignee is an appId, make sure the corresponding service principal is created "
+                       "with 'az ad sp create --id {assignee}'.".format(assignee=assignee))
     except (CloudError, GraphErrorException):
         logger.warning('Failed to query %s by invoking Graph API. '
                        'If you don\'t have permission to query Graph API, please '
@@ -1790,7 +1814,7 @@ def _application_add_password(client, app, start_datetime, end_datetime, display
             "displayName": display_name
         }
     }
-    result = client.application_password_add(app['id'], body)
+    result = client.application_password_add(app[ID], body)
     return result
 
 
@@ -1859,8 +1883,8 @@ def _build_app_roles(app_roles):
         app_roles = app_roles.get('appRoles', [])
     for x in app_roles:
         # Make sure 'id' is specified as a GUID if not provided.
-        if not x.get('id'):
-            x['id'] = str(_gen_guid())
+        if not x.get(ID):
+            x[ID] = str(_gen_guid())
     return app_roles
 
 
@@ -1955,15 +1979,13 @@ def _reset_credentials(cmd, graph_object, add_password_func, remove_password_fun
     if not append:
         # Delete all existing password
         for cred in graph_object['passwordCredentials']:
-            body = {
-                "keyId": cred['keyId']
-            }
-            remove_password_func(graph_object['id'], body)
+            body = {"keyId": cred['keyId']}
+            remove_password_func(graph_object[ID], body)
 
     # By default, add password
     if not (cert or create_cert):
         body = _build_add_password_credential_body(display_name, app_start_date, app_end_date)
-        add_password_result = add_password_func(graph_object['id'], body)
+        add_password_result = add_password_func(graph_object[ID], body)
         password = add_password_result['secretText']
         key_id = add_password_result['keyId']
 
@@ -1988,7 +2010,7 @@ def _reset_credentials(cmd, graph_object, add_password_func, remove_password_fun
         patch_body = {
             'keyCredentials': key_creds
         }
-        patch_func(graph_object['id'], body=patch_body)
+        patch_func(graph_object[ID], body=patch_body)
 
     result = {
         'appId': graph_object['appId'],
@@ -2012,12 +2034,12 @@ def _delete_credential(graph_object, remove_password_func, patch_function, key_i
             body = {
                 'keyCredentials': key_creds
             }
-            patch_function(graph_object['id'], body)
+            patch_function(graph_object[ID], body)
         print(graph_object)
         raise CLIError("'{}' doesn't exist in graph object '{}'.".format(
-            key_id, graph_object['id']))
+            key_id, graph_object[ID]))
     else:
         body = {
             "keyId": key_id
         }
-        remove_password_func(graph_object['id'], body)
+        remove_password_func(graph_object[ID], body)
