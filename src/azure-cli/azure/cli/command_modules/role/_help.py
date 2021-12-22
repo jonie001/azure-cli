@@ -601,6 +601,24 @@ examples:
     crafted: true
 """
 
+helps['ad user delete'] = """
+type: command
+short-summary: Delete Azure Active Directory user.
+examples:
+  - name: Delete Azure Active Directory users. 
+    text: az ad user delete --id 00000000-0000-0000-0000-000000000000
+"""
+
+
+helps['ad user show'] = """
+type: command
+short-summary: Show details for a Azure Active Directory user.
+examples:
+  - name: Show Azure Active Directory user. 
+    text: az ad user show --id 00000000-0000-0000-0000-000000000000
+"""
+
+
 helps['identity'] = """
 type: group
 short-summary: Managed Service Identities

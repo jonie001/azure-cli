@@ -177,8 +177,16 @@ def load_arguments(self, _):
         c.argument('password', help='user password')
         c.argument('upn_or_object_id', options_list=['--id', c.deprecate(target='--upn-or-object-id', redirect='--id', hide=True)], help='The object ID or principal name of the user for which to get information')
 
+    with self.argument_context('ad user create') as c:
+        c.argument('immutable_id', help="This must be specified if you are using a federated domain for "
+                                        "the user's userPrincipalName (UPN) property when creating a new user account."
+                                        " It is used to associate an on-premises Active Directory user account with "
+                                        "their Azure AD user object.")
+        c.argument('user_principal_name', help="The user principal name (someuser@contoso.com). "
+                                "It must contain one of the verified domains for the tenant.")
+
     with self.argument_context('ad user get-member-groups') as c:
-        c.argument('security_enabled_only', action='store_true',
+        c.argument('security_enabled_only', arg_type=get_three_state_flag(),
                    help='If true, only membership in security-enabled groups should be checked. Otherwise, membership in all groups should be checked.')
 
     group_help_msg = "group's object id or display name(prefix also works if there is a unique match)"
