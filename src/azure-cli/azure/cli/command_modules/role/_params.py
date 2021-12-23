@@ -122,6 +122,9 @@ def load_arguments(self, _):
         c.argument('identifier', options_list=['--id'], help='identifier uri, application id, or object id of the associated application')
 
     with self.argument_context('ad sp create-for-rbac') as c:
+        c.argument('display_name', options_list=['--display-name', '--name', '-n'],
+                   help='Display name of the service principal. If not present, default to azure-cli-%Y-%m-%d-%H-%M-%S '
+                        'where the suffix is the time of creation.')
         c.argument('scopes', nargs='+')
         c.argument('role', completer=get_role_definition_name_completion_list)
         c.argument('skip_assignment', arg_type=get_three_state_flag(),
@@ -134,7 +137,6 @@ def load_arguments(self, _):
 
     for item in ['create-for-rbac', 'credential reset']:
         with self.argument_context('ad sp {}'.format(item)) as c:
-            c.argument('name', name_arg_type)
             c.argument('cert', arg_group='Credential', validator=validate_cert)
             c.argument('years', type=int, default=None, arg_group='Credential')
             c.argument('end_date', default=None, arg_group='Credential',
@@ -142,9 +144,10 @@ def load_arguments(self, _):
             c.argument('create_cert', action='store_true', arg_group='Credential')
             c.argument('keyvault', arg_group='Credential')
             c.argument('append', action='store_true', help='Append the new credential instead of overwriting.')
-            c.argument('display_name', help="Friendly name for the password.", arg_group='Credential')
 
     with self.argument_context('ad sp credential reset') as c:
+        c.argument('name', name_arg_type)
+        c.argument('display_name', help="Friendly name for the password.", arg_group='Credential')
         c.argument('password', options_list=['--password', '-p'], arg_group='Credential',
                    help="If missing, CLI will generate a strong password")
 

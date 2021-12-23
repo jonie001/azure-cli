@@ -1347,7 +1347,7 @@ def list_service_principal_owners(client, identifier):
 # pylint: disable=inconsistent-return-statements
 def create_service_principal_for_rbac(
         # pylint:disable=too-many-statements,too-many-locals, too-many-branches, unused-argument
-        cmd, name=None, years=None, create_cert=False, cert=None, scopes=None, role=None,
+        cmd, display_name=None, years=None, create_cert=False, cert=None, scopes=None, role=None,
         show_auth_for_sdk=None, skip_assignment=False, keyvault=None):
     import time
 
@@ -1358,13 +1358,13 @@ def create_service_principal_for_rbac(
     _RETRY_TIMES = 36
     existing_sps = None
 
-    if not name:
-        # No name is provided, create a new one
+    if not display_name:
+        # No display name is provided, create a new one
         app_display_name = 'azure-cli-' + datetime.datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
     else:
-        app_display_name = name
+        app_display_name = display_name
         # patch existing app with the same displayName to make the command idempotent
-        query_exp = "displayName eq '{}'".format(name)
+        query_exp = "displayName eq '{}'".format(display_name)
         existing_sps = list(graph_client.service_principal_list(filter=query_exp))
 
     app_start_date = datetime.datetime.now(datetime.timezone.utc)

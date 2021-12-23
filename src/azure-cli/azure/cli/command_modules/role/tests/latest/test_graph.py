@@ -352,20 +352,22 @@ class CreateForRbacScenarioTest(ScenarioTest):
             result = self.cmd('ad sp create-for-rbac -n {display_name} --role Reader').get_output_in_json()
             self.kwargs['app_id'] = result['appId']
 
-            self.cmd('ad sp list --spn {app_id}',
-                     checks=self.check('length([*])', 1))
+            result = self.cmd('ad sp list --spn {app_id}', checks=self.check('length([*])', 1)).get_output_in_json()
+            object_id = result[0]['id']
 
             self.cmd('ad app list --app-id {app_id}',
                      checks=self.check('length([*])', 1))
 
             result = self.cmd('role assignment list --assignee {app_id}').get_output_in_json()
-            object_id = result[0]['principalId']
+            assert len(result) == 1
+            assert object_id == result[0]['principalId']
 
-            self.cmd('ad sp delete --id {app_id}')
+            self.cmd('role assignment delete --assignee {app_id}')
 
-            result2 = self.cmd('role assignment list --all').get_output_in_json()
-            self.assertFalse([a for a in result2 if a['id'] == object_id])
+            result = self.cmd('role assignment list --assignee {app_id}').get_output_in_json()
+            assert not result
 
+            self.cmd('ad app delete --id {app_id}')
             self.cmd('ad sp list --spn {app_id}',
                      checks=self.check('length([])', 0))
             self.cmd('ad app list --app-id {app_id}',
@@ -373,22 +375,29 @@ class CreateForRbacScenarioTest(ScenarioTest):
 
     @AllowLargeResponse()
     def test_create_for_rbac_idempotent(self):
-        self.kwargs['display_name'] = self.create_random_name(prefix='sp_', length=14)
+        self.kwargs['display_name'] = self.create_random_name(prefix='azure-cli-', length=14)
 
         with mock.patch('azure.cli.command_modules.role.custom._gen_guid', side_effect=self.create_guid):
             try:
-                result1 = self.cmd('ad sp create-for-rbac -n {display_name}').get_output_in_json()
-                result2 = self.cmd('ad sp create-for-rbac -n {display_name}').get_output_in_json()
+                result1 = self.cmd('ad sp create-for-rbac -n {display_name} --role Reader').get_output_in_json()
+                result2 = self.cmd('ad sp create-for-rbac -n {display_name} --role Reader').get_output_in_json()
                 self.assertEqual(result1['appId'], result2['appId'])
 
                 self.kwargs['app_id'] = result1['appId']
+                result = self.cmd('ad app list --app-id {app_id}').get_output_in_json()
+                self.assertEqual(1, len(result))
+
                 result = self.cmd('ad sp list --spn {app_id}').get_output_in_json()
                 self.assertEqual(1, len(result))
 
                 result = self.cmd('role assignment list --assignee {app_id}').get_output_in_json()
                 self.assertEqual(1, len(result))
             finally:
-                self.cmd('ad sp delete --id {app_id}')
+                try:
+                    self.cmd('role assignment delete --assignee {app_id}').get_output_in_json()
+                    self.cmd('ad app delete --id {app_id}')
+                except:
+                    pass
 
 
 class GraphUserScenarioTest(ScenarioTest):
