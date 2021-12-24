@@ -226,10 +226,10 @@ class GraphClient:
 
     def user_get(self, id):
         # https://docs.microsoft.com/graph/api/user-get
-        # known MSGraph issues
-        if '@' in id:
-            if '#' in id:
-                id = id.replace('#', '%23')
+
+        # MSGraph known issues regarding '$' and '#' https://docs.microsoft.com/en-us/graph/known-issues#users
+        if '@' in id and '#' in id:
+            id = id.replace('#', '%23')
         if id.startswith('$'):
             result = self._send("GET", "/users('{}')".format(id))
         else:
