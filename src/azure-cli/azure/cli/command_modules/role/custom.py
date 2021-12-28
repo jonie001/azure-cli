@@ -829,8 +829,9 @@ def remove_group_owner(client, owner_object_id, group_id):
 
 
 def check_group_membership(client, group_id, member_object_id):
-    return client.is_member_of(CheckGroupMembershipParameters(group_id=group_id,
-                                                              member_id=member_object_id))
+    body = {"groupIds": [group_id]}
+    response = client.directory_object_check_member_groups(id=member_object_id, body=body)
+    return {"value": response is not None and group_id in response}
 
 
 def list_group_members(client, group_id):

@@ -493,12 +493,12 @@ class GraphGroupScenarioTest(ScenarioTest):
             self.cmd('ad group get-member-groups -g {group}',
                      checks=self.check('length([])', 0))
             # check user1 memebership
-            # self.cmd('ad group member check -g {group} --member-id {user1_id}',
-            #          checks=self.check('value', True))
+            self.cmd('ad group member check -g {group} --member-id {user1_id}',
+                     checks=self.check('value', True))
 
             # check user2 memebership
-            # self.cmd('ad group member check -g {group} --member-id {user2_id}',
-            #          checks=self.check('value', True))
+            self.cmd('ad group member check -g {group} --member-id {user2_id}',
+                     checks=self.check('value', True))
 
             self.cmd('ad group member list -g {group}', checks=[
                 self.check("length([?displayName=='{user1}_new'])", 1),
@@ -509,8 +509,8 @@ class GraphGroupScenarioTest(ScenarioTest):
             # remove user1
             self.cmd('ad group member remove -g {group} --member-id {user1_id}')
             # check user1 memebership
-            # self.cmd('ad group member check -g {group} --member-id {user1_id}',
-            #          checks=self.check('value', False))
+            self.cmd('ad group member check -g {group} --member-id {user1_id}',
+                     checks=self.check('value', False))
             # delete the group
             self.cmd('ad group delete -g {group}')
             self.cmd('ad group list',

@@ -164,6 +164,11 @@ class GraphClient:
         result = self._send("POST", "/directoryObjects/getByIds", body=body)
         return result
 
+    def directory_object_check_member_groups(self, id, body):
+        # https://docs.microsoft.com/en-us/graph/api/directoryobject-checkmembergroups
+        result = self._send("POST", "/directoryObjects/{id}/checkMemberGroups".format(id=id), body=body)
+        return result
+
     def directory_object_get_member_groups(self, id, body):
         # https://docs.microsoft.com/en-us/graph/api/directoryobject-getmembergroups
         result = self._send("POST", "/groups/{id}/getMemberGroups".format(id=id), body=body)
@@ -216,7 +221,7 @@ class GraphClient:
 
     def group_member_remove(self, id, member_id):
         # https://docs.microsoft.com/en-us/graph/api/group-delete-members
-        result = self._send("DELETE", "/groups/{id}/owners/{member_id}/$ref".format(id=id, member_id=member_id))
+        result = self._send("DELETE", "/groups/{id}/members/{member_id}/$ref".format(id=id, member_id=member_id))
         return result
 
     def user_create(self, body):
