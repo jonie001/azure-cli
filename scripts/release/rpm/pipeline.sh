@@ -9,10 +9,10 @@ set -exv
 # IMAGE should be one of 'centos7', 'centos_stream8'
 : "${IMAGE:?IMAGE environment variable not set.}"
 
-CLI_VERSION=`cat src/azure-cli/azure/cli/__main__.py | grep __version__ | sed s/' '//g | sed s/'__version__='// |  sed s/\"//g`
-
 # DIST should be one of '.el7', '.el8'
-DIST=$(docker run --rm centos:7 rpm --eval '%{dist}')
+: "${DIST:?DIST environment variable not set.}"
+
+CLI_VERSION=`cat src/azure-cli/azure/cli/__main__.py | grep __version__ | sed s/' '//g | sed s/'__version__='// |  sed s/\"//g`
 
 # Create a container image that includes the source code and a built RPM using this file.
 docker build \
@@ -25,7 +25,7 @@ docker build \
 # Continue the previous build, and create a container that has the current azure-cli build but not the source code.
 docker build \
     --build-arg cli_version=${CLI_VERSION} \
-    -f ./scripts/release/rpm/Dockerfile.centos \
+    -f ./scripts/release/rpm/Dockerfile.${IMAGE} \
     -t azure/azure-cli:${IMAGE} \
     .
 

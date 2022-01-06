@@ -704,8 +704,10 @@ jobs:
     matrix:
       CentOS7:
         image: centos7
+        dist: .el7
       CentOSStream8:
         image: centos_stream8
+        dist: .el8
   steps:
   - task: Bash@3
     displayName: 'Build Rpm Package'
@@ -714,6 +716,7 @@ jobs:
       filePath: scripts/release/rpm/pipeline.sh
     env:
       IMAGE: $(image)
+      DIST: $(dist)
   - task: PublishPipelineArtifact@0
     displayName: 'Publish Artifact: yum'
     inputs:
