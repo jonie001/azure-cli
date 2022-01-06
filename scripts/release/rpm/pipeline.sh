@@ -6,13 +6,13 @@ set -exv
 
 : "${BUILD_STAGINGDIRECTORY:?BUILD_STAGINGDIRECTORY environment variable not set.}"
 
-# IMAGE should be one of 'centos', 'centos_stream8'
+# IMAGE should be one of 'centos7', 'centos_stream8'
 : "${IMAGE:?IMAGE environment variable not set.}"
 
 CLI_VERSION=`cat src/azure-cli/azure/cli/__main__.py | grep __version__ | sed s/' '//g | sed s/'__version__='// |  sed s/\"//g`
 
-# DIST should be one of 'el7', 'el8'
-DIST=$(docker run -it --rm centos:7 rpm --eval '%{dist}')
+# DIST should be one of '.el7', '.el8'
+DIST=$(docker run --rm centos:7 rpm --eval '%{dist}')
 
 # Create a container image that includes the source code and a built RPM using this file.
 docker build \
