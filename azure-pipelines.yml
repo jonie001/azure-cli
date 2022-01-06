@@ -700,12 +700,20 @@ jobs:
   displayName: Build Yum Package
   pool:
     vmImage: 'ubuntu-20.04'
+  strategy:
+    matrix:
+      CentOS7:
+        image: centos7
+      CentOSStream8:
+        image: centos_stream8
   steps:
   - task: Bash@3
     displayName: 'Build Rpm Package'
     inputs:
       targetType: 'filePath'
       filePath: scripts/release/rpm/pipeline.sh
+    env:
+      IMAGE: $(image)
   - task: PublishPipelineArtifact@0
     displayName: 'Publish Artifact: yum'
     inputs:
