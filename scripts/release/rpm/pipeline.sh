@@ -9,9 +9,6 @@ set -exv
 # IMAGE should be one of 'centos7', 'centos_stream8'
 : "${IMAGE:?IMAGE environment variable not set.}"
 
-# DIST should be one of '.el7', '.el8'
-: "${DIST:?DIST environment variable not set.}"
-
 CLI_VERSION=`cat src/azure-cli/azure/cli/__main__.py | grep __version__ | sed s/' '//g | sed s/'__version__='// |  sed s/\"//g`
 
 # Create a container image that includes the source code and a built RPM using this file.
@@ -30,10 +27,11 @@ docker build \
     .
 
 # Extract the built RPM so that it can be distributed independently.
-docker run \
-    azure/azure-cli:${IMAGE}-builder \
-    cat /root/rpmbuild/RPMS/x86_64/azure-cli-${CLI_VERSION}-1${DIST}.x86_64.rpm \
-    > ${BUILD_STAGINGDIRECTORY}/azure-cli-${CLI_VERSION}-1${DIST}.x86_64.rpm
+# The RPM file looks like azure-cli-2.32.0-1.el7.x86_64.rpm
+id=$(docker create azure/azure-cli:centos7-builder)
+# https://docs.docker.com/engine/reference/commandline/cp/
+# Append /. so that the x86_64 folder's content is copied, instead of x86_64 folder itself.
+docker cp $id:/root/rpmbuild/RPMS/x86_64/. ${BUILD_STAGINGDIRECTORY}
 
 # Save these too a staging directory so that later build phases can choose to save them as Artifacts or publish them to
 # a registry.
