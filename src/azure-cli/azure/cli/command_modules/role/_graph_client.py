@@ -261,6 +261,21 @@ class GraphClient:
         result = self._send("GET", "/users/{}/memberOf".format(id))
         return result
 
+    def oauth2_permission_grant_create(self, body):
+        # https://docs.microsoft.com/en-us/graph/api/oauth2permissiongrant-post
+        result = self._send("POST", "/oauth2PermissionGrants", body=body)
+        return result
+
+    def oauth2_permission_grant_list(self, filter=None):
+        # https://docs.microsoft.com/en-us/graph/api/oauth2permissiongrant-list
+        result = self._send("GET", "/oauth2PermissionGrants" + _filter_to_query(filter))
+        return result
+
+    def oauth2_permission_grant_delete(self, id):
+        # https://docs.microsoft.com/en-us/graph/api/oauth2permissiongrant-delete
+        result = self._send("DELETE", "/oAuth2PermissionGrants/{id}".format(id=id))
+        return result
+
 
 def _filter_to_query(filter):
     if filter is not None:

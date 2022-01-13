@@ -100,11 +100,32 @@ def load_arguments(self, _):
         c.argument('api', help='Specify `RequiredResourceAccess.resourceAppId` - The unique identifier for the resource that the application requires access to. This should be equal to the appId declared on the target resource application.')
         # https://github.com/Azure/azure-rest-api-specs/blob/32e56f061668a1bf1eeca6209000fad4c09afca8/specification/graphrbac/data-plane/Microsoft.GraphRbac/stable/1.6/graphrbac.json#L2833
         c.argument('api_permissions', nargs='+', help='Specify `ResourceAccess.id` - The unique identifier for one of the OAuth2Permission or AppRole instances that the resource application exposes. Space-separated list of `<resource-access-id>=<type>`.')
-        c.argument('expires', help='Expiry date for the permissions in years. e.g. 1, 2 or "never"')
-        c.argument('scope', help='Specifies the value of the scope claim that the resource application should expect in the OAuth 2.0 access token, e.g. User.Read')
-        c.argument('consent_type', arg_type=get_enum_type(ConsentType), default=ConsentType.all_principals.value,
-                   help="Indicates if consent was provided by the administrator (on behalf of the organization) or by an individual.")
-        c.argument('principal_id', help='If --consent-type is "Principal", this argument specifies the object of the user that granted consent and applies only for that user.')
+
+    with self.argument_context('ad app permission grant') as c:
+        c.argument('identifier', options_list=['--id, --client-id'],
+                   help='The id of the client service principal for the application which is authorized to act on '
+                        'behalf of a signed-in user when accessing an API.')
+        c.argument('scope', nargs='*',
+                   help='A space-separated list of the claim values for delegated permissions which should be included '
+                        'in access tokens for the resource application (the API). '
+                        "For example, openid User.Read GroupMember.Read.All. "
+                        'Each claim value should match the value field of one of the delegated permissions defined by '
+                        'the API, listed in the publishedPermissionScopes property of the resource service principal.')
+        c.argument('consent_type', arg_type=get_enum_type(["AllPrincipals", "Principal"]), default="AllPrincipals",
+                   help="Indicates whether authorization is granted for the client application to impersonate all "
+                        "users or only a specific user. 'AllPrincipals' indicates authorization to impersonate all "
+                        "users. 'Principal' indicates authorization to impersonate a specific user. Consent on behalf "
+                        "of all users can be granted by an administrator. Non-admin users may be authorized to consent "
+                        "on behalf of themselves in some cases, for some delegated permissions.")
+        c.argument('principal_id',
+                   help='The id of the user on behalf of whom the client is authorized to access the resource, '
+                        "when consentType is 'Principal'. If consentType is 'AllPrincipals' this value is null. "
+                        "Required when consentType is 'Principal'.")
+        c.argument('api', options_list=['--api, --resource-id'],
+                   help='The id of the resource service principal to which access is authorized. This identifies the '
+                        'API which the client is authorized to attempt to call on behalf of a signed-in user.')
+
+    with self.argument_context('ad app permission list-grants') as c:
         c.argument('show_resource_name', options_list=['--show-resource-name', '-r'],
                    arg_type=get_three_state_flag(), help="show resource's display name")
 

@@ -1062,9 +1062,9 @@ def patch_service_principal(cmd, identifier, parameters):
     return graph_client.service_principals.update(object_id, parameters)
 
 
-def _get_grant_permissions(graph_client, client_sp_object_id=None, query_filter=None):
+def _get_grant_permissions(client, client_sp_object_id=None, query_filter=None):
     query_filter = query_filter or ("clientId eq '{}'".format(client_sp_object_id) if client_sp_object_id else None)
-    grant_info = graph_client.oauth2_permission_grant.list(filter=query_filter)
+    grant_info = client.oauth2_permission_grant_list(filter=query_filter)
     try:
         # Make the REST request immediately so that errors can be raised and handled.
         return list(grant_info)
@@ -1102,22 +1102,6 @@ def list_permissions(cmd, identifier):
                                      x.resource_id == result[0].object_id])
         setattr(p, 'expiryTime', expiry_time)
     return permissions
-
-
-def list_permission_grants(cmd, identifier=None, query_filter=None, show_resource_name=None):
-    if identifier and query_filter:
-        raise CLIError('Please only use one of "--identifier" and "--filter", not both')
-    graph_client = _graph_client_factory(cmd.cli_ctx)
-    client_sp_object_id = None
-    if identifier:
-        client_sp_object_id = _resolve_service_principal(graph_client.service_principals, identifier)
-    result = _get_grant_permissions(graph_client, client_sp_object_id=client_sp_object_id, query_filter=query_filter)
-    result = list(result)
-    if show_resource_name:
-        for r in result:
-            sp = graph_client.service_principals.get(r.resource_id)
-            setattr(r, 'resource_display_name', sp.display_name)
-    return result
 
 
 def add_permission(client, identifier, api, api_permissions):
@@ -1209,48 +1193,46 @@ def admin_consent(cmd, client, identifier):
     send_raw_request(cmd.cli_ctx, 'post', url, resource='74658136-14ec-4630-ad9b-26e160ff0fc6')
 
 
-def grant_application(cmd, identifier, api, consent_type=None, principal_id=None,
-                      expires='1', scope='user_impersonation'):
-    graph_client = _graph_client_factory(cmd.cli_ctx)
-
+def grant_application(cmd, client, identifier, api, consent_type=None, principal_id=None, scope=None):
+    scope = scope or ['user_impersonation']
     # Get the Service Principal ObjectId for the client app
-    client_sp_object_id = _resolve_service_principal(graph_client.service_principals, identifier)
+    client_sp_object_id = _resolve_service_principal(client, identifier)
 
-    # Get the Service Principal ObjectId for associated app
-    associated_sp_object_id = _resolve_service_principal(graph_client.service_principals, api)
+    # Get the Service Principal ObjectId for resource app
+    resource_sp_object_id = _resolve_service_principal(client, api)
 
     # ensure to remove the older grant
-    grant_permissions = _get_grant_permissions(graph_client, client_sp_object_id=client_sp_object_id)
-    to_delete = [p.object_id for p in grant_permissions if p.client_id == client_sp_object_id and
-                 p.resource_id == associated_sp_object_id]
+    # TODO: Filtering with clientId and resourceId removes too many.
+    #   https://github.com/Azure/azure-cli/issues/20974
+    grant_permissions = _get_grant_permissions(client, client_sp_object_id=client_sp_object_id)
+    to_delete = [p[ID] for p in grant_permissions if p['clientId'] == client_sp_object_id and
+                 p['resourceId'] == resource_sp_object_id]
     for p in to_delete:
-        graph_client.oauth2_permission_grant.delete(p)
+        client.oauth2_permission_grant_delete(p)
 
-    # Build payload
-    start_date = datetime.datetime.utcnow()
-    end_date = start_date + relativedelta(years=1)
-
-    if expires.lower() == 'never':
-        end_date = start_date + relativedelta(years=1000)
-    else:
-        try:
-            end_date = start_date + relativedelta(years=int(expires))
-        except ValueError:
-            raise CLIError('usage error: --expires <INT>|never')
-
-    payload = {
-        "odata.type": "Microsoft.DirectoryServices.OAuth2PermissionGrant",
+    body = {
         "clientId": client_sp_object_id,
         "consentType": consent_type,
-        "resourceId": associated_sp_object_id,
-        "scope": scope,
-        'principalId': principal_id,
-        "startTime": start_date.isoformat(),
-        "expiryTime": end_date.isoformat()
+        "principalId": principal_id,
+        "resourceId": resource_sp_object_id,
+        "scope": ' '.join(scope)
     }
+    return client.oauth2_permission_grant_create(body)  # pylint: disable=no-member
 
-    # Grant OAuth2 permissions
-    return graph_client.oauth2_permission_grant.create(payload)  # pylint: disable=no-member
+
+def list_permission_grants(client, identifier=None, query_filter=None, show_resource_name=None):
+    if identifier and query_filter:
+        raise CLIError('Please only use one of "--identifier" and "--filter", not both')
+    client_sp_object_id = None
+    if identifier:
+        client_sp_object_id = _resolve_service_principal(client, identifier)
+    result = _get_grant_permissions(client, client_sp_object_id=client_sp_object_id, query_filter=query_filter)
+    result = list(result)
+    if show_resource_name:
+        for r in result:
+            sp = client.service_principal_get(r['resourceId'])
+            r['resourceDisplayName'] = sp['displayName']
+    return result
 
 
 def _create_service_principal(cli_ctx, identifier, resolve_app=True):
