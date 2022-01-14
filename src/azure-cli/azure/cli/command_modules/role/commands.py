@@ -97,57 +97,12 @@ def get_graph_client(cli_ctx, _):
     return _graph_client_factory(cli_ctx)
 
 
-def get_graph_client_applications(cli_ctx, _):
-    return _graph_client_factory(cli_ctx).applications
-
-
-def get_graph_client_service_principals(cli_ctx, _):
-    return _graph_client_factory(cli_ctx).service_principals
-
-
-def get_graph_client_users(cli_ctx, _):
-    return _graph_client_factory(cli_ctx).users
-
-
-def get_graph_client_signed_in_users(cli_ctx, _):
-    return _graph_client_factory(cli_ctx).signed_in_user
-
-
-def get_graph_client_groups(cli_ctx, _):
-    return _graph_client_factory(cli_ctx).groups
-
-
 # pylint: disable=line-too-long, too-many-statements
 def load_command_table(self, _):
-
-    graph_sdk = CliCommandType(
-        operations_tmpl='azure.cli.command_modules.role._graph_client#GraphClient.{}',
-        client_factory=get_graph_client
-    )
-
-    role_users_sdk = CliCommandType(
-        operations_tmpl='azure.graphrbac.operations#UsersOperations.{}',
-        client_factory=get_graph_client_users
-    )
-
-    role_group_sdk = CliCommandType(
-        operations_tmpl='azure.graphrbac.operations#GroupsOperations.{}',
-        client_factory=get_graph_client_groups
-    )
-
-    signed_in_users_sdk = CliCommandType(
-        operations_tmpl='azure.graphrbac.operations#SignedInUserOperations.{}',
-        client_factory=get_graph_client_signed_in_users
-    )
 
     identity_sdk = CliCommandType(
         operations_tmpl='azure.mgmt.msi.operations#UserAssignedIdentitiesOperations.{}',
         client_factory=_msi_user_identities_operations
-    )
-
-    sp_sdk = CliCommandType(
-        operations_tmpl='azure.graphrbac.operations.service_principals_operations#ServicePrincipalsOperations.{}',
-        client_factory=get_graph_client_service_principals
     )
 
     role_custom = CliCommandType(operations_tmpl='azure.cli.command_modules.role.custom#{}')

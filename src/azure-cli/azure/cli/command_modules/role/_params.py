@@ -96,10 +96,19 @@ def load_arguments(self, _):
         c.argument('identifier', options_list=['--id'], help='identifier uri, application id, or object id of the application')
 
     with self.argument_context('ad app permission') as c:
-        # https://github.com/Azure/azure-rest-api-specs/blob/32e56f061668a1bf1eeca6209000fad4c09afca8/specification/graphrbac/data-plane/Microsoft.GraphRbac/stable/1.6/graphrbac.json#L2817
-        c.argument('api', help='Specify `RequiredResourceAccess.resourceAppId` - The unique identifier for the resource that the application requires access to. This should be equal to the appId declared on the target resource application.')
-        # https://github.com/Azure/azure-rest-api-specs/blob/32e56f061668a1bf1eeca6209000fad4c09afca8/specification/graphrbac/data-plane/Microsoft.GraphRbac/stable/1.6/graphrbac.json#L2833
-        c.argument('api_permissions', nargs='+', help='Specify `ResourceAccess.id` - The unique identifier for one of the OAuth2Permission or AppRole instances that the resource application exposes. Space-separated list of `<resource-access-id>=<type>`.')
+        # https://docs.microsoft.com/en-us/graph/api/resources/requiredresourceaccess
+        c.argument('api',
+                   help='requiredResourceAccess.resourceAppId - '
+                        'The unique identifier for the resource that the application requires access to. '
+                        'This should be equal to the appId declared on the target resource application.')
+        # https://docs.microsoft.com/en-us/graph/api/resources/resourceaccess
+        c.argument('api_permissions', nargs='+',
+                   help='Space-separated list of {id}={type}. '
+                        "{id} is resourceAccess.id - The unique identifier for one of the oauth2PermissionScopes or "
+                        'appRole instances that the resource application exposes. '
+                        "{type} is resourceAccess.type - Specifies whether the id property references an "
+                        'oauth2PermissionScopes or an appRole. The possible values are: Scope (for OAuth 2.0 '
+                        'permission scopes) or Role (for app roles).')
 
     with self.argument_context('ad app permission grant') as c:
         c.argument('identifier', options_list=['--id, --client-id'],
