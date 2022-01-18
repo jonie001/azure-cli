@@ -31,6 +31,8 @@ No breaking change.
 
 ### `az ad user`
 
+No breaking change.
+
 ### `az ad group`
 
 
