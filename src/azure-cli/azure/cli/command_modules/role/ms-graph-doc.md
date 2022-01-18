@@ -37,6 +37,7 @@ No breaking change.
 ## Known issues
 
 - Generic update arguments `--add`, `--set` and `--remove` currently don't work. 
+- `az ad` and Microsoft Graph related commands fail in Azure Stack environments which don't have Microsoft Graph support
 
 ## Command tree
 
