@@ -35,6 +35,13 @@ No breaking change.
 
 ### `az ad group`
 
+#### `az ad group get-member-groups`
+
+- `--additional-properties` argument is removed
+
+#### `az ad group member add`
+
+- `--additional-properties` argument is removed
 
 ## Known issues
 
