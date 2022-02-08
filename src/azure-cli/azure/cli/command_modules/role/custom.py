@@ -1832,7 +1832,7 @@ def _set_application_properties(
         body['isFallbackPublicClient'] = is_fallback_public_client
 
     if implicit_grant_id_token_issuance is not None:
-        body.setdefault('web', {}).setdefault('implicitGrantSettings', {})['enableAccessTokenIssuance'] = \
+        body.setdefault('web', {}).setdefault('implicitGrantSettings', {})['enableIdTokenIssuance'] = \
             implicit_grant_id_token_issuance
 
     if implicit_grant_access_token_issuance is not None:
