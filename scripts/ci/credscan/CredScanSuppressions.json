@@ -553,6 +553,12 @@
         "src\\azure-cli\\azure\\cli\\command_modules\\container\\tests\\latest\\recordings\\test_container_create_with_acr.yaml"
       ],
       "_justification": "[Container] one-off password used in test, not persisted"
+    },
+    {
+      "file": [
+        ".yaml"
+      ],
+      "_justification": "One-time recording files."
     }
   ]
 }
